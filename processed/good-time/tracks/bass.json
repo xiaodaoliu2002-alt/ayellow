@@ -1,0 +1,202 @@
+{
+  "id": "bass",
+  "name": "Rider 1 Bass",
+  "role": "base",
+  "synth": "bass",
+  "path": "tracks/bass.json",
+  "loopBeats": 32,
+  "events": [
+    {
+      "beat": 0,
+      "duration": 0.75,
+      "note": 36,
+      "velocity": 0.86
+    },
+    {
+      "beat": 1,
+      "duration": 0.5,
+      "note": 43,
+      "velocity": 0.66
+    },
+    {
+      "beat": 2,
+      "duration": 0.75,
+      "note": 36,
+      "velocity": 0.8
+    },
+    {
+      "beat": 3,
+      "duration": 0.5,
+      "note": 48,
+      "velocity": 0.62
+    },
+    {
+      "beat": 4,
+      "duration": 0.75,
+      "note": 43,
+      "velocity": 0.86
+    },
+    {
+      "beat": 5,
+      "duration": 0.5,
+      "note": 50,
+      "velocity": 0.66
+    },
+    {
+      "beat": 6,
+      "duration": 0.75,
+      "note": 43,
+      "velocity": 0.8
+    },
+    {
+      "beat": 7,
+      "duration": 0.5,
+      "note": 55,
+      "velocity": 0.62
+    },
+    {
+      "beat": 8,
+      "duration": 0.75,
+      "note": 45,
+      "velocity": 0.86
+    },
+    {
+      "beat": 9,
+      "duration": 0.5,
+      "note": 52,
+      "velocity": 0.66
+    },
+    {
+      "beat": 10,
+      "duration": 0.75,
+      "note": 45,
+      "velocity": 0.8
+    },
+    {
+      "beat": 11,
+      "duration": 0.5,
+      "note": 57,
+      "velocity": 0.62
+    },
+    {
+      "beat": 12,
+      "duration": 0.75,
+      "note": 41,
+      "velocity": 0.86
+    },
+    {
+      "beat": 13,
+      "duration": 0.5,
+      "note": 48,
+      "velocity": 0.66
+    },
+    {
+      "beat": 14,
+      "duration": 0.75,
+      "note": 41,
+      "velocity": 0.8
+    },
+    {
+      "beat": 15,
+      "duration": 0.5,
+      "note": 53,
+      "velocity": 0.62
+    },
+    {
+      "beat": 16,
+      "duration": 0.75,
+      "note": 36,
+      "velocity": 0.86
+    },
+    {
+      "beat": 17,
+      "duration": 0.5,
+      "note": 43,
+      "velocity": 0.66
+    },
+    {
+      "beat": 18,
+      "duration": 0.75,
+      "note": 36,
+      "velocity": 0.8
+    },
+    {
+      "beat": 19,
+      "duration": 0.5,
+      "note": 48,
+      "velocity": 0.62
+    },
+    {
+      "beat": 20,
+      "duration": 0.75,
+      "note": 43,
+      "velocity": 0.86
+    },
+    {
+      "beat": 21,
+      "duration": 0.5,
+      "note": 50,
+      "velocity": 0.66
+    },
+    {
+      "beat": 22,
+      "duration": 0.75,
+      "note": 43,
+      "velocity": 0.8
+    },
+    {
+      "beat": 23,
+      "duration": 0.5,
+      "note": 55,
+      "velocity": 0.62
+    },
+    {
+      "beat": 24,
+      "duration": 0.75,
+      "note": 45,
+      "velocity": 0.86
+    },
+    {
+      "beat": 25,
+      "duration": 0.5,
+      "note": 52,
+      "velocity": 0.66
+    },
+    {
+      "beat": 26,
+      "duration": 0.75,
+      "note": 45,
+      "velocity": 0.8
+    },
+    {
+      "beat": 27,
+      "duration": 0.5,
+      "note": 57,
+      "velocity": 0.62
+    },
+    {
+      "beat": 28,
+      "duration": 0.75,
+      "note": 41,
+      "velocity": 0.86
+    },
+    {
+      "beat": 29,
+      "duration": 0.5,
+      "note": 48,
+      "velocity": 0.66
+    },
+    {
+      "beat": 30,
+      "duration": 0.75,
+      "note": 41,
+      "velocity": 0.8
+    },
+    {
+      "beat": 31,
+      "duration": 0.5,
+      "note": 53,
+      "velocity": 0.62
+    }
+  ]
+}

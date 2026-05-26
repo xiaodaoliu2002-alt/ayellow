@@ -1,0 +1,59 @@
+{
+  "id": "good-time",
+  "title": "Good Time",
+  "artist": "Owl City & Carly Rae Jepsen",
+  "baseBpm": 126,
+  "loopBeats": 32,
+  "trackOrder": [
+    "bass",
+    "lead",
+    "drums",
+    "piano",
+    "guitar",
+    "pad"
+  ],
+  "tracks": [
+    {
+      "id": "bass",
+      "name": "Rider 1 Bass",
+      "role": "base",
+      "synth": "bass",
+      "path": "tracks/bass.json"
+    },
+    {
+      "id": "lead",
+      "name": "Rider 2 Lead",
+      "role": "base",
+      "synth": "lead",
+      "path": "tracks/lead.json"
+    },
+    {
+      "id": "drums",
+      "name": "Sync Drums",
+      "role": "reward",
+      "synth": "drums",
+      "path": "tracks/drums.json"
+    },
+    {
+      "id": "piano",
+      "name": "Sync Piano",
+      "role": "reward",
+      "synth": "piano",
+      "path": "tracks/piano.json"
+    },
+    {
+      "id": "guitar",
+      "name": "Sync Pluck",
+      "role": "reward",
+      "synth": "pluck",
+      "path": "tracks/guitar.json"
+    },
+    {
+      "id": "pad",
+      "name": "Sync Pad",
+      "role": "reward",
+      "synth": "pad",
+      "path": "tracks/pad.json"
+    }
+  ]
+}

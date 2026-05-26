@@ -1,0 +1,28 @@
+.DS_Store
+
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Build output and local caches
+dist/
+web/dist/
+web/tsconfig.tsbuildinfo
+.vite/
+web/node_modules/.vite/
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Logs and local environment files
+*.log
+.env
+.env.*
+!.env.example
+
+# Editor files
+.idea/
+.vscode/

@@ -1,0 +1,298 @@
+{
+  "id": "piano",
+  "name": "Sync Piano",
+  "role": "reward",
+  "synth": "piano",
+  "path": "tracks/piano.json",
+  "loopBeats": 32,
+  "events": [
+    {
+      "beat": 0,
+      "duration": 1.5,
+      "note": 60,
+      "velocity": 0.42
+    },
+    {
+      "beat": 2,
+      "duration": 1.25,
+      "note": 72,
+      "velocity": 0.34
+    },
+    {
+      "beat": 0,
+      "duration": 1.5,
+      "note": 64,
+      "velocity": 0.42
+    },
+    {
+      "beat": 2,
+      "duration": 1.25,
+      "note": 76,
+      "velocity": 0.34
+    },
+    {
+      "beat": 0,
+      "duration": 1.5,
+      "note": 67,
+      "velocity": 0.42
+    },
+    {
+      "beat": 2,
+      "duration": 1.25,
+      "note": 79,
+      "velocity": 0.34
+    },
+    {
+      "beat": 4,
+      "duration": 1.5,
+      "note": 55,
+      "velocity": 0.42
+    },
+    {
+      "beat": 6,
+      "duration": 1.25,
+      "note": 67,
+      "velocity": 0.34
+    },
+    {
+      "beat": 4,
+      "duration": 1.5,
+      "note": 59,
+      "velocity": 0.42
+    },
+    {
+      "beat": 6,
+      "duration": 1.25,
+      "note": 71,
+      "velocity": 0.34
+    },
+    {
+      "beat": 4,
+      "duration": 1.5,
+      "note": 62,
+      "velocity": 0.42
+    },
+    {
+      "beat": 6,
+      "duration": 1.25,
+      "note": 74,
+      "velocity": 0.34
+    },
+    {
+      "beat": 8,
+      "duration": 1.5,
+      "note": 57,
+      "velocity": 0.42
+    },
+    {
+      "beat": 10,
+      "duration": 1.25,
+      "note": 69,
+      "velocity": 0.34
+    },
+    {
+      "beat": 8,
+      "duration": 1.5,
+      "note": 60,
+      "velocity": 0.42
+    },
+    {
+      "beat": 10,
+      "duration": 1.25,
+      "note": 72,
+      "velocity": 0.34
+    },
+    {
+      "beat": 8,
+      "duration": 1.5,
+      "note": 64,
+      "velocity": 0.42
+    },
+    {
+      "beat": 10,
+      "duration": 1.25,
+      "note": 76,
+      "velocity": 0.34
+    },
+    {
+      "beat": 12,
+      "duration": 1.5,
+      "note": 53,
+      "velocity": 0.42
+    },
+    {
+      "beat": 14,
+      "duration": 1.25,
+      "note": 65,
+      "velocity": 0.34
+    },
+    {
+      "beat": 12,
+      "duration": 1.5,
+      "note": 57,
+      "velocity": 0.42
+    },
+    {
+      "beat": 14,
+      "duration": 1.25,
+      "note": 69,
+      "velocity": 0.34
+    },
+    {
+      "beat": 12,
+      "duration": 1.5,
+      "note": 60,
+      "velocity": 0.42
+    },
+    {
+      "beat": 14,
+      "duration": 1.25,
+      "note": 72,
+      "velocity": 0.34
+    },
+    {
+      "beat": 16,
+      "duration": 1.5,
+      "note": 60,
+      "velocity": 0.42
+    },
+    {
+      "beat": 18,
+      "duration": 1.25,
+      "note": 72,
+      "velocity": 0.34
+    },
+    {
+      "beat": 16,
+      "duration": 1.5,
+      "note": 64,
+      "velocity": 0.42
+    },
+    {
+      "beat": 18,
+      "duration": 1.25,
+      "note": 76,
+      "velocity": 0.34
+    },
+    {
+      "beat": 16,
+      "duration": 1.5,
+      "note": 67,
+      "velocity": 0.42
+    },
+    {
+      "beat": 18,
+      "duration": 1.25,
+      "note": 79,
+      "velocity": 0.34
+    },
+    {
+      "beat": 20,
+      "duration": 1.5,
+      "note": 55,
+      "velocity": 0.42
+    },
+    {
+      "beat": 22,
+      "duration": 1.25,
+      "note": 67,
+      "velocity": 0.34
+    },
+    {
+      "beat": 20,
+      "duration": 1.5,
+      "note": 59,
+      "velocity": 0.42
+    },
+    {
+      "beat": 22,
+      "duration": 1.25,
+      "note": 71,
+      "velocity": 0.34
+    },
+    {
+      "beat": 20,
+      "duration": 1.5,
+      "note": 62,
+      "velocity": 0.42
+    },
+    {
+      "beat": 22,
+      "duration": 1.25,
+      "note": 74,
+      "velocity": 0.34
+    },
+    {
+      "beat": 24,
+      "duration": 1.5,
+      "note": 57,
+      "velocity": 0.42
+    },
+    {
+      "beat": 26,
+      "duration": 1.25,
+      "note": 69,
+      "velocity": 0.34
+    },
+    {
+      "beat": 24,
+      "duration": 1.5,
+      "note": 60,
+      "velocity": 0.42
+    },
+    {
+      "beat": 26,
+      "duration": 1.25,
+      "note": 72,
+      "velocity": 0.34
+    },
+    {
+      "beat": 24,
+      "duration": 1.5,
+      "note": 64,
+      "velocity": 0.42
+    },
+    {
+      "beat": 26,
+      "duration": 1.25,
+      "note": 76,
+      "velocity": 0.34
+    },
+    {
+      "beat": 28,
+      "duration": 1.5,
+      "note": 53,
+      "velocity": 0.42
+    },
+    {
+      "beat": 30,
+      "duration": 1.25,
+      "note": 65,
+      "velocity": 0.34
+    },
+    {
+      "beat": 28,
+      "duration": 1.5,
+      "note": 57,
+      "velocity": 0.42
+    },
+    {
+      "beat": 30,
+      "duration": 1.25,
+      "note": 69,
+      "velocity": 0.34
+    },
+    {
+      "beat": 28,
+      "duration": 1.5,
+      "note": 60,
+      "velocity": 0.42
+    },
+    {
+      "beat": 30,
+      "duration": 1.25,
+      "note": 72,
+      "velocity": 0.34
+    }
+  ]
+}

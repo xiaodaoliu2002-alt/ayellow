@@ -1,0 +1,202 @@
+{
+  "id": "pad",
+  "name": "Sync Pad",
+  "role": "reward",
+  "synth": "pad",
+  "path": "tracks/pad.json",
+  "loopBeats": 32,
+  "events": [
+    {
+      "beat": 0,
+      "duration": 3.75,
+      "note": 48,
+      "velocity": 0.3
+    },
+    {
+      "beat": 0,
+      "duration": 3.75,
+      "note": 55,
+      "velocity": 0.3
+    },
+    {
+      "beat": 0,
+      "duration": 3.75,
+      "note": 60,
+      "velocity": 0.3
+    },
+    {
+      "beat": 0,
+      "duration": 3.75,
+      "note": 64,
+      "velocity": 0.3
+    },
+    {
+      "beat": 4,
+      "duration": 3.75,
+      "note": 43,
+      "velocity": 0.3
+    },
+    {
+      "beat": 4,
+      "duration": 3.75,
+      "note": 50,
+      "velocity": 0.3
+    },
+    {
+      "beat": 4,
+      "duration": 3.75,
+      "note": 55,
+      "velocity": 0.3
+    },
+    {
+      "beat": 4,
+      "duration": 3.75,
+      "note": 59,
+      "velocity": 0.3
+    },
+    {
+      "beat": 8,
+      "duration": 3.75,
+      "note": 45,
+      "velocity": 0.3
+    },
+    {
+      "beat": 8,
+      "duration": 3.75,
+      "note": 52,
+      "velocity": 0.3
+    },
+    {
+      "beat": 8,
+      "duration": 3.75,
+      "note": 57,
+      "velocity": 0.3
+    },
+    {
+      "beat": 8,
+      "duration": 3.75,
+      "note": 60,
+      "velocity": 0.3
+    },
+    {
+      "beat": 12,
+      "duration": 3.75,
+      "note": 41,
+      "velocity": 0.3
+    },
+    {
+      "beat": 12,
+      "duration": 3.75,
+      "note": 48,
+      "velocity": 0.3
+    },
+    {
+      "beat": 12,
+      "duration": 3.75,
+      "note": 53,
+      "velocity": 0.3
+    },
+    {
+      "beat": 12,
+      "duration": 3.75,
+      "note": 57,
+      "velocity": 0.3
+    },
+    {
+      "beat": 16,
+      "duration": 3.75,
+      "note": 48,
+      "velocity": 0.3
+    },
+    {
+      "beat": 16,
+      "duration": 3.75,
+      "note": 55,
+      "velocity": 0.3
+    },
+    {
+      "beat": 16,
+      "duration": 3.75,
+      "note": 60,
+      "velocity": 0.3
+    },
+    {
+      "beat": 16,
+      "duration": 3.75,
+      "note": 64,
+      "velocity": 0.3
+    },
+    {
+      "beat": 20,
+      "duration": 3.75,
+      "note": 43,
+      "velocity": 0.3
+    },
+    {
+      "beat": 20,
+      "duration": 3.75,
+      "note": 50,
+      "velocity": 0.3
+    },
+    {
+      "beat": 20,
+      "duration": 3.75,
+      "note": 55,
+      "velocity": 0.3
+    },
+    {
+      "beat": 20,
+      "duration": 3.75,
+      "note": 59,
+      "velocity": 0.3
+    },
+    {
+      "beat": 24,
+      "duration": 3.75,
+      "note": 45,
+      "velocity": 0.3
+    },
+    {
+      "beat": 24,
+      "duration": 3.75,
+      "note": 52,
+      "velocity": 0.3
+    },
+    {
+      "beat": 24,
+      "duration": 3.75,
+      "note": 57,
+      "velocity": 0.3
+    },
+    {
+      "beat": 24,
+      "duration": 3.75,
+      "note": 60,
+      "velocity": 0.3
+    },
+    {
+      "beat": 28,
+      "duration": 3.75,
+      "note": 41,
+      "velocity": 0.3
+    },
+    {
+      "beat": 28,
+      "duration": 3.75,
+      "note": 48,
+      "velocity": 0.3
+    },
+    {
+      "beat": 28,
+      "duration": 3.75,
+      "note": 53,
+      "velocity": 0.3
+    },
+    {
+      "beat": 28,
+      "duration": 3.75,
+      "note": 57,
+      "velocity": 0.3
+    }
+  ]
+}

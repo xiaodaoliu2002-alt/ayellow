@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:test": "npm --prefix web run test",
+    "backend:test": "python3 -m unittest discover backend/tests",
+    "backend:dev": "PYTHONPATH=backend python3 -m cycling_synth.server",
+    "generate:good-time": "node scripts/generate_good_time_events.mjs"
+  }
+}
