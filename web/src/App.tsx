@@ -118,11 +118,8 @@ export function App() {
       const current = gatewayRef.current;
       const effectiveCadence1 = current.riders.user1.cadenceRpm * cadenceMultiplier;
       const effectiveCadence2 = current.riders.user2.cadenceRpm * cadenceMultiplier;
-      const ridersActive =
-        current.riders.user1.online &&
-        current.riders.user2.online &&
-        effectiveCadence1 >= RIDE_START_CADENCE_RPM &&
-        effectiveCadence2 >= RIDE_START_CADENCE_RPM;
+      const rider1Active = current.riders.user1.online && effectiveCadence1 >= RIDE_START_CADENCE_RPM;
+      const rider2Active = current.riders.user2.online && effectiveCadence2 >= RIDE_START_CADENCE_RPM;
       const rider1CadenceForSync = experimentMode ? effectiveCadence1 : current.riders.user1.cadenceRpm;
       const rider2CadenceForSync = experimentMode ? effectiveCadence2 : current.riders.user2.cadenceRpm;
       const nextSync = updateSyncState(syncRef.current, {
@@ -147,7 +144,8 @@ export function App() {
       const nextChallenge = updateChallengeState(challengeRef.current, {
         dtSeconds: 0.25,
         synced: nextSync.synced,
-        ridersActive,
+        rider1Active,
+        rider2Active,
         song: currentSong,
       });
       syncRef.current = nextSync;

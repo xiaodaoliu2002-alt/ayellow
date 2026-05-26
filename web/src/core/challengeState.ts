@@ -19,7 +19,8 @@ export interface ChallengeState {
 export interface ChallengeUpdateInput {
   dtSeconds: number;
   synced: boolean;
-  ridersActive: boolean;
+  rider1Active: boolean;
+  rider2Active: boolean;
   song: SongConfig;
   stageSeconds?: number;
   regressRate?: number;
@@ -41,8 +42,22 @@ function tracksForStage(song: SongConfig, stage: ChallengeStage): StemTrackId[] 
   return tracks;
 }
 
-function volumesForTracks(activeTracks: StemTrackId[], ridersActive: boolean): Record<StemTrackId, number> {
-  return Object.fromEntries(TRACKS.map((track) => [track, ridersActive && activeTracks.includes(track) ? 1 : 0])) as Record<
+function volumesForTracks(
+  activeTracks: StemTrackId[],
+  song: SongConfig,
+  rider1Active: boolean,
+  rider2Active: boolean,
+): Record<StemTrackId, number> {
+  const ridersActive = rider1Active && rider2Active;
+  return Object.fromEntries(TRACKS.map((track) => {
+    const isRider1Track = track === song.baseTracks[0];
+    const isRider2Track = track === song.baseTracks[1];
+    const isRewardTrack = song.rewardTracks.includes(track);
+    const audible =
+      activeTracks.includes(track) &&
+      ((isRider1Track && rider1Active) || (isRider2Track && rider2Active) || (isRewardTrack && ridersActive));
+    return [track, audible ? 1 : 0];
+  })) as Record<
     StemTrackId,
     number
   >;
@@ -55,7 +70,7 @@ export function createChallengeState(song: SongConfig, stageSeconds = 30): Chall
     progressSeconds: 0,
     stageSeconds,
     activeTracks,
-    layerVolumes: volumesForTracks(activeTracks, false),
+    layerVolumes: volumesForTracks(activeTracks, song, false, false),
     cue: null,
   };
 }
@@ -80,6 +95,7 @@ function cueForStage(stage: ChallengeStage): ChallengeCue | null {
 export function updateChallengeState(previous: ChallengeState, input: ChallengeUpdateInput): ChallengeState {
   const stageSeconds = input.stageSeconds ?? previous.stageSeconds;
   const dtSeconds = Math.max(0, input.dtSeconds);
+  const ridersActive = input.rider1Active && input.rider2Active;
 
   if (previous.stage === 4) {
     const activeTracks = tracksForStage(input.song, 4);
@@ -87,12 +103,12 @@ export function updateChallengeState(previous: ChallengeState, input: ChallengeU
       ...previous,
       activeTracks,
       progressSeconds: stageSeconds,
-      layerVolumes: volumesForTracks(activeTracks, input.ridersActive),
+      layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
       cue: null,
     };
   }
 
-  const nextProgress = input.synced && input.ridersActive
+  const nextProgress = input.synced && ridersActive
     ? previous.progressSeconds + dtSeconds
     : Math.max(0, previous.progressSeconds - dtSeconds * (input.regressRate ?? 1));
 
@@ -104,7 +120,7 @@ export function updateChallengeState(previous: ChallengeState, input: ChallengeU
       progressSeconds: stage === 4 ? stageSeconds : 0,
       stageSeconds,
       activeTracks,
-      layerVolumes: volumesForTracks(activeTracks, input.ridersActive),
+      layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
       cue: cueForStage(stage),
     };
   }
@@ -115,7 +131,7 @@ export function updateChallengeState(previous: ChallengeState, input: ChallengeU
     progressSeconds: nextProgress,
     stageSeconds,
     activeTracks,
-    layerVolumes: volumesForTracks(activeTracks, input.ridersActive),
+    layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
     cue: null,
   };
 }
