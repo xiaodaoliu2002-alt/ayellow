@@ -1,22 +1,24 @@
 import { Link2, Timer, Zap } from "lucide-react";
+import type { ChallengeState } from "../core/challengeState";
 import type { SyncState } from "../core/syncState";
 
 interface SyncPanelProps {
   sync: SyncState;
+  challenge: ChallengeState;
 }
 
-export function SyncPanel({ sync }: SyncPanelProps) {
-  const progress = sync.nextUnlockSeconds === null ? 1 : 1 - sync.nextUnlockSeconds / 60;
+export function SyncPanel({ sync, challenge }: SyncPanelProps) {
+  const progress = challenge.stage === 4 ? 1 : challenge.progressSeconds / challenge.stageSeconds;
 
   return (
     <section className="panel sync-panel">
       <div className="panel-title">
         <Link2 size={18} />
-        <span>同步</span>
+        <span>阶段 {challenge.stage}/4</span>
         <strong>{sync.synced ? "保持中" : sync.reason}</strong>
       </div>
       <div className="sync-number">
-        <span>{Math.floor(sync.syncedSeconds)}</span>
+        <span>{Math.floor(challenge.progressSeconds)}</span>
         <small>秒</small>
       </div>
       <div className="progress">
@@ -25,7 +27,7 @@ export function SyncPanel({ sync }: SyncPanelProps) {
       <div className="sync-details">
         <span>
           <Timer size={15} />
-          {sync.nextUnlockSeconds === null ? "全部解锁" : `下一层 ${Math.ceil(sync.nextUnlockSeconds)}s`}
+          {challenge.stage === 4 ? "挑战完成" : `本阶段 ${Math.ceil(challenge.stageSeconds - challenge.progressSeconds)}s`}
         </span>
         <span>
           <Zap size={15} />

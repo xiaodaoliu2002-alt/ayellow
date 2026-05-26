@@ -1,14 +1,15 @@
 import { Pause, Play, RadioTower } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GatewayClient, type Axis, type GatewayPayload, type RiderConfigPayload, type RiderId } from "./api/gatewayClient";
 import { AudioEngine } from "./audio/engine";
 import type { TrackSpeeds } from "./audio/types";
 import { RiderPanel } from "./components/RiderPanel";
 import { SyncPanel } from "./components/SyncPanel";
 import { TrackLayers } from "./components/TrackLayers";
+import { createChallengeState, updateChallengeState, type ChallengeState } from "./core/challengeState";
 import { mapCadenceToPlayback } from "./core/cadenceMapping";
 import { createSyncState, updateSyncState, type SyncState } from "./core/syncState";
-import type { TrackId } from "./music/types";
+import { findSong, SONGS, type SongId } from "./music/songCatalog";
 
 const defaultRider = (id: RiderId): GatewayPayload["riders"][RiderId] => ({
   id,
@@ -42,23 +43,28 @@ const defaultConfig: Record<RiderId, RiderConfigPayload> = {
   user2: { sensorIp: "", frontTeeth: 42, rearTeeth: 16, axis: "z" },
 };
 
-const TRACKS: TrackId[] = ["bass", "lead", "drums", "piano", "guitar", "pad"];
 type SyncMode = "experiment" | "ride";
+const RIDE_START_CADENCE_RPM = 30;
+const defaultSong = findSong("magic-potion");
 
 export function App() {
   const engineRef = useRef<AudioEngine | null>(null);
   const clientRef = useRef<GatewayClient | null>(null);
   const gatewayRef = useRef<GatewayPayload>(defaultGatewayState);
   const syncRef = useRef<SyncState>(createSyncState());
+  const challengeRef = useRef<ChallengeState>(createChallengeState(defaultSong));
   const [gatewayState, setGatewayState] = useState<GatewayPayload>(defaultGatewayState);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "offline">("offline");
   const [riderConfig, setRiderConfig] = useState(defaultConfig);
   const [audioRunning, setAudioRunning] = useState(false);
   const [sync, setSync] = useState<SyncState>(() => createSyncState());
+  const [challenge, setChallenge] = useState<ChallengeState>(() => createChallengeState(defaultSong));
   const [cadenceMultiplier, setCadenceMultiplier] = useState(3);
   const [speedIntensity, setSpeedIntensity] = useState(1.35);
   const [syncWindow, setSyncWindow] = useState(10);
   const [syncMode, setSyncMode] = useState<SyncMode>("experiment");
+  const [songId, setSongId] = useState<SongId>("magic-potion");
+  const currentSong = useMemo(() => findSong(songId), [songId]);
   const experimentMode = syncMode === "experiment";
 
   const rider1Playback = mapCadenceToPlayback({
@@ -73,8 +79,6 @@ export function App() {
     cadenceMultiplier,
     speedIntensity,
   });
-  const rewardSpeed =
-    rider1Playback.valid && rider2Playback.valid ? (rider1Playback.speedRatio + rider2Playback.speedRatio) / 2 : 1;
 
   useEffect(() => {
     const client = new GatewayClient("ws://127.0.0.1:8765", setGatewayState, setConnectionStatus);
@@ -92,11 +96,19 @@ export function App() {
   }, [riderConfig]);
 
   useEffect(() => {
-    const reset = createSyncState();
-    syncRef.current = reset;
-    setSync(reset);
-    engineRef.current?.setLayerVolumes(reset.layerVolumes);
-  }, [syncMode]);
+    const resetSync = createSyncState();
+    const resetChallenge = createChallengeState(currentSong);
+    syncRef.current = resetSync;
+    challengeRef.current = resetChallenge;
+    setSync(resetSync);
+    setChallenge(resetChallenge);
+    engineRef.current?.setLayerVolumes(resetChallenge.layerVolumes);
+    if (audioRunning && engineRef.current) {
+      void engineRef.current.start(currentSong.tracks).then(() => {
+        engineRef.current?.setLayerVolumes(resetChallenge.layerVolumes);
+      });
+    }
+  }, [audioRunning, currentSong, syncMode]);
 
   useEffect(() => {
     if (!audioRunning) {
@@ -104,14 +116,16 @@ export function App() {
     }
     const timer = window.setInterval(() => {
       const current = gatewayRef.current;
-      const previousSync = syncRef.current;
-      const rider1CadenceForSync = experimentMode
-        ? current.riders.user1.cadenceRpm * cadenceMultiplier
-        : current.riders.user1.cadenceRpm;
-      const rider2CadenceForSync = experimentMode
-        ? current.riders.user2.cadenceRpm * cadenceMultiplier
-        : current.riders.user2.cadenceRpm;
-      const next = updateSyncState(syncRef.current, {
+      const effectiveCadence1 = current.riders.user1.cadenceRpm * cadenceMultiplier;
+      const effectiveCadence2 = current.riders.user2.cadenceRpm * cadenceMultiplier;
+      const ridersActive =
+        current.riders.user1.online &&
+        current.riders.user2.online &&
+        effectiveCadence1 >= RIDE_START_CADENCE_RPM &&
+        effectiveCadence2 >= RIDE_START_CADENCE_RPM;
+      const rider1CadenceForSync = experimentMode ? effectiveCadence1 : current.riders.user1.cadenceRpm;
+      const rider2CadenceForSync = experimentMode ? effectiveCadence2 : current.riders.user2.cadenceRpm;
+      const nextSync = updateSyncState(syncRef.current, {
         dtSeconds: 0.25,
         rider1CadenceRpm: rider1CadenceForSync,
         rider2CadenceRpm: rider2CadenceForSync,
@@ -130,33 +144,43 @@ export function App() {
         historySeconds: experimentMode ? 4 : 8,
         requirePhase: !experimentMode,
       });
-      syncRef.current = next;
-      setSync(next);
-      if (next.synced && (!previousSync.synced || next.lastCueTrack)) {
-        engineRef.current?.syncToStem("bass");
-      }
-      if (next.lastCueTrack) {
-        engineRef.current?.cue();
+      const nextChallenge = updateChallengeState(challengeRef.current, {
+        dtSeconds: 0.25,
+        synced: nextSync.synced,
+        ridersActive,
+        song: currentSong,
+      });
+      syncRef.current = nextSync;
+      challengeRef.current = nextChallenge;
+      setSync(nextSync);
+      setChallenge(nextChallenge);
+      if (nextChallenge.cue) {
+        engineRef.current?.syncToStem("drums");
+        engineRef.current?.playStageCue(nextChallenge.cue.kind);
       }
     }, 250);
     return () => window.clearInterval(timer);
-  }, [audioRunning, cadenceMultiplier, experimentMode, syncWindow]);
+  }, [audioRunning, cadenceMultiplier, currentSong, experimentMode, syncWindow]);
 
   useEffect(() => {
     if (!audioRunning) {
       return;
     }
-    const speeds: TrackSpeeds = {
-      drums: rider1Playback.valid ? rider1Playback.speedRatio : 1,
-      bass: rider2Playback.valid ? rider2Playback.speedRatio : 1,
-      lead: rewardSpeed,
-      piano: rewardSpeed,
-      guitar: rewardSpeed,
-      pad: rewardSpeed,
-    };
+    const drumSpeed = rider1Playback.valid ? rider1Playback.speedRatio : 1;
+    const guitarSpeed = rider2Playback.valid ? rider2Playback.speedRatio : 1;
+    const speeds: TrackSpeeds =
+      challenge.stage === 4
+        ? { drums: 1, guitar: 1, bass: 1, other: 1, vocals: 1 }
+        : {
+            drums: drumSpeed,
+            guitar: guitarSpeed,
+            bass: drumSpeed,
+            other: drumSpeed,
+            vocals: drumSpeed,
+          };
     engineRef.current?.setTrackSpeeds(speeds);
-    engineRef.current?.setLayerVolumes(sync.layerVolumes);
-  }, [audioRunning, rider1Playback, rider2Playback, rewardSpeed, sync.layerVolumes]);
+    engineRef.current?.setLayerVolumes(challenge.layerVolumes);
+  }, [audioRunning, challenge.layerVolumes, challenge.stage, rider1Playback, rider2Playback]);
 
   const setConfig = (id: RiderId, next: RiderConfigPayload) => {
     setRiderConfig((current) => ({ ...current, [id]: next }));
@@ -170,8 +194,8 @@ export function App() {
     if (!engineRef.current) {
       engineRef.current = new AudioEngine();
     }
-    await engineRef.current.start();
-    engineRef.current.setLayerVolumes(sync.layerVolumes);
+    await engineRef.current.start(currentSong.tracks);
+    engineRef.current.setLayerVolumes(challenge.layerVolumes);
     setAudioRunning(true);
   };
 
@@ -184,7 +208,7 @@ export function App() {
     <main>
       <header>
         <div>
-          <p className="eyebrow">Good Time Stem Rider</p>
+          <p className="eyebrow">{currentSong.title}</p>
           <h1>双人骑行音乐控制台</h1>
         </div>
         <div className="header-actions">
@@ -210,11 +234,11 @@ export function App() {
           config={riderConfig.user1}
           onConfigChange={(next) => setConfig("user1", next)}
         />
-        <SyncPanel sync={sync} />
+        <SyncPanel sync={sync} challenge={challenge} />
         <RiderPanel
           id="user2"
           label="用户 2"
-          trackName="Bass"
+          trackName="Guitar"
           rider={gatewayState.riders.user2}
           speedRatio={rider2Playback.speedRatio}
           effectiveCadenceRpm={rider2Playback.effectiveCadenceRpm}
@@ -224,13 +248,24 @@ export function App() {
       </section>
 
       <section className="lower-grid">
-        <TrackLayers sync={sync} />
+        <TrackLayers challenge={challenge} song={currentSong} />
         <section className="panel control-panel">
           <div className="panel-title">
             <RadioTower size={18} />
             <span>实验控制</span>
-            <strong>手动调节</strong>
+            <strong>{audioRunning ? "运行中" : "待开始"}</strong>
           </div>
+          <label className="range-row">
+            <span>歌曲</span>
+            <div className="mode-toggle song-toggle" role="group" aria-label="歌曲">
+              {SONGS.map((song) => (
+                <button key={song.id} className={song.id === songId ? "selected" : ""} onClick={() => setSongId(song.id)}>
+                  {song.title}
+                </button>
+              ))}
+            </div>
+            <strong>{currentSong.artist}</strong>
+          </label>
           <label className="range-row">
             <span>同步模式</span>
             <div className="mode-toggle" role="group" aria-label="同步模式">

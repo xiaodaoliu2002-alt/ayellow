@@ -1,33 +1,31 @@
 import { Music2 } from "lucide-react";
-import type { SyncState, TrackId } from "../core/syncState";
+import type { ChallengeState } from "../core/challengeState";
+import type { SongConfig, StemTrackId } from "../music/songCatalog";
 
-const LABELS: Record<TrackId, string> = {
+const FALLBACK_LABELS: Record<StemTrackId, string> = {
   bass: "Bass",
-  lead: "Vocals",
+  vocals: "Vocals",
   drums: "Drums",
-  piano: "Piano",
   guitar: "Guitar",
-  pad: "Other",
+  other: "Other",
 };
 
-const ORDER: TrackId[] = ["drums", "bass", "lead", "piano", "guitar", "pad"];
-
-export function TrackLayers({ sync }: { sync: SyncState }) {
+export function TrackLayers({ challenge, song }: { challenge: ChallengeState; song: SongConfig }) {
   return (
     <section className="panel track-panel">
       <div className="panel-title">
         <Music2 size={18} />
         <span>音轨</span>
-        <strong>{sync.unlockedTracks.length}/6</strong>
+        <strong>{challenge.activeTracks.length}/{song.tracks.length}</strong>
       </div>
       <div className="track-list">
-        {ORDER.map((track) => (
-          <div className="track-row" key={track}>
-            <span>{LABELS[track]}</span>
+        {song.tracks.map((track) => (
+          <div className="track-row" key={track.id}>
+            <span>{track.label || FALLBACK_LABELS[track.id]}</span>
             <div className="volume-bar">
-              <div style={{ width: `${sync.layerVolumes[track] * 100}%` }} />
+              <div style={{ width: `${(challenge.layerVolumes[track.id] ?? 0) * 100}%` }} />
             </div>
-            <small>{sync.layerVolumes[track] > 0.01 ? "on" : "off"}</small>
+            <small>{(challenge.layerVolumes[track.id] ?? 0) > 0.01 ? "on" : "off"}</small>
           </div>
         ))}
       </div>

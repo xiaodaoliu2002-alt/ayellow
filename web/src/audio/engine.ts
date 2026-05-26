@@ -1,18 +1,13 @@
-import { playCue } from "./synths";
 import type { TrackSpeeds, TrackVolumes } from "./types";
-import type { TrackId } from "../music/types";
+import type { ChallengeCueKind } from "../core/challengeState";
+import type { StemTrackConfig, StemTrackId } from "../music/songCatalog";
 
 type PitchPreservingAudio = HTMLAudioElement & {
   mozPreservesPitch?: boolean;
   webkitPreservesPitch?: boolean;
 };
 
-interface StemTrack {
-  id: TrackId;
-  path: string;
-}
-
-type StemRuntime = StemTrack & {
+type StemRuntime = StemTrackConfig & {
   element: PitchPreservingAudio;
   currentSpeed: number;
   targetSpeed: number;
@@ -20,18 +15,8 @@ type StemRuntime = StemTrack & {
   targetVolume: number;
 };
 
-const STEMS: StemTrack[] = [
-  { id: "bass", path: "/audio/good-time/bass.mp3" },
-  { id: "lead", path: "/audio/good-time/vocals.mp3" },
-  { id: "drums", path: "/audio/good-time/drums.mp3" },
-  { id: "piano", path: "/audio/good-time/piano.mp3" },
-  { id: "guitar", path: "/audio/good-time/guitar.mp3" },
-  { id: "pad", path: "/audio/good-time/other.mp3" },
-];
-
 const SPEED_MIN = 0.5;
 const SPEED_MAX = 1.75;
-const TRACKS: TrackId[] = ["bass", "lead", "drums", "piano", "guitar", "pad"];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -43,30 +28,44 @@ function applyPitchPreservation(element: PitchPreservingAudio): void {
   element.webkitPreservesPitch = true;
 }
 
+function speak(text: string): void {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "zh-CN";
+  utterance.rate = 1.08;
+  utterance.volume = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
 export class AudioEngine {
   private context: AudioContext | null = null;
   private cueGain: GainNode | null = null;
-  private tracks: Map<TrackId, StemRuntime> = new Map();
+  private tracks: Map<StemTrackId, StemRuntime> = new Map();
+  private trackOrder: StemTrackId[] = [];
   private frame: number | null = null;
   private lastFrameTime = 0;
 
-  async start(): Promise<void> {
+  async start(stems: StemTrackConfig[]): Promise<void> {
     this.stop();
     if (!this.context) {
       this.context = new AudioContext();
       this.cueGain = this.context.createGain();
-      this.cueGain.gain.value = 0.7;
+      this.cueGain.gain.value = 0.8;
       this.cueGain.connect(this.context.destination);
     }
     if (this.context.state === "suspended") {
       await this.context.resume();
     }
 
-    for (const stem of STEMS) {
+    this.trackOrder = stems.map((stem) => stem.id);
+    for (const stem of stems) {
       const element = new Audio(stem.path) as PitchPreservingAudio;
       element.loop = true;
       element.preload = "auto";
-      element.volume = stem.id === "drums" || stem.id === "bass" ? 1 : 0;
+      element.volume = 0;
       element.playbackRate = 1;
       element.defaultPlaybackRate = 1;
       applyPitchPreservation(element);
@@ -75,8 +74,8 @@ export class AudioEngine {
         element,
         currentSpeed: 1,
         targetSpeed: 1,
-        currentVolume: element.volume,
-        targetVolume: element.volume,
+        currentVolume: 0,
+        targetVolume: 0,
       });
     }
 
@@ -97,10 +96,11 @@ export class AudioEngine {
       runtime.element.load();
     }
     this.tracks.clear();
+    this.trackOrder = [];
   }
 
-  setTrackSpeeds(speeds: Partial<TrackSpeeds>): void {
-    for (const track of TRACKS) {
+  setTrackSpeeds(speeds: TrackSpeeds): void {
+    for (const track of this.trackOrder) {
       const runtime = this.tracks.get(track);
       const speed = speeds[track];
       if (!runtime || speed === undefined || !Number.isFinite(speed)) {
@@ -110,18 +110,18 @@ export class AudioEngine {
     }
   }
 
-  setLayerVolumes(volumes: Partial<TrackVolumes>): void {
-    for (const track of TRACKS) {
+  setLayerVolumes(volumes: TrackVolumes): void {
+    for (const track of this.trackOrder) {
       const runtime = this.tracks.get(track);
-      const volume = volumes[track];
-      if (!runtime || volume === undefined || !Number.isFinite(volume)) {
+      if (!runtime) {
         continue;
       }
-      runtime.targetVolume = clamp(volume, 0, 1);
+      const volume = volumes[track] ?? 0;
+      runtime.targetVolume = Number.isFinite(volume) ? clamp(volume, 0, 1) : 0;
     }
   }
 
-  syncToStem(referenceId: TrackId = "bass"): void {
+  syncToStem(referenceId: StemTrackId = "drums"): void {
     const reference = this.tracks.get(referenceId);
     if (!reference || !Number.isFinite(reference.element.currentTime)) {
       return;
@@ -135,10 +135,52 @@ export class AudioEngine {
     }
   }
 
-  cue(): void {
-    if (this.context && this.cueGain) {
-      playCue(this.context, this.cueGain);
+  playStageCue(kind: ChallengeCueKind): void {
+    if (!this.context || !this.cueGain) {
+      return;
     }
+    const now = this.context.currentTime + 0.03;
+    if (kind === "speedUp") {
+      this.playTone(84, now, 0.12, 0.55);
+      this.playTone(91, now + 0.14, 0.16, 0.5);
+      speak("加速！");
+      this.playPulseTrain(now + 0.46, 15, 0.24, 92);
+      return;
+    }
+    if (kind === "slowDown") {
+      this.playTone(79, now, 0.14, 0.55);
+      this.playTone(72, now + 0.16, 0.2, 0.52);
+      speak("减速！");
+      this.playPulseTrain(now + 0.46, 15, 0.42, 64);
+      return;
+    }
+
+    this.playTone(72, now, 0.18, 0.5);
+    this.playTone(79, now + 0.08, 0.22, 0.44);
+    this.playTone(84, now + 0.16, 0.42, 0.5);
+  }
+
+  private playPulseTrain(startTime: number, count: number, intervalSeconds: number, note: number): void {
+    for (let index = 0; index < count; index += 1) {
+      this.playTone(note, startTime + index * intervalSeconds, 0.055, 0.42);
+    }
+  }
+
+  private playTone(note: number, startTime: number, duration: number, velocity: number): void {
+    if (!this.context || !this.cueGain) {
+      return;
+    }
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(440 * 2 ** ((note - 69) / 12), startTime);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, velocity), startTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    oscillator.connect(gain);
+    gain.connect(this.cueGain);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + duration + 0.04);
   }
 
   private tick(time: number): void {
