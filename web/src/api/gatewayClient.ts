@@ -39,6 +39,39 @@ export interface RiderConfigPayload {
   axis: Axis;
 }
 
+const DEFAULT_GATEWAY_PORT = 8765;
+
+type GatewayImportMeta = ImportMeta & {
+  env?: {
+    VITE_GATEWAY_WS_URL?: string;
+  };
+};
+
+function configuredGatewayUrl(): string | undefined {
+  return (import.meta as GatewayImportMeta).env?.VITE_GATEWAY_WS_URL;
+}
+
+export function resolveGatewayUrl(
+  pageUrl: Pick<Location, "hostname" | "protocol"> | URL = window.location,
+  configuredUrl = configuredGatewayUrl(),
+): string {
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+  const websocketProtocol = pageUrl.protocol === "https:" ? "wss:" : "ws:";
+  const hostname = pageUrl.hostname || "127.0.0.1";
+  return `${websocketProtocol}//${hostname}:${DEFAULT_GATEWAY_PORT}`;
+}
+
+export function gatewayEndpointLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.host;
+  } catch {
+    return url;
+  }
+}
+
 export class GatewayClient {
   private socket: WebSocket | null = null;
   private shouldReconnect = true;

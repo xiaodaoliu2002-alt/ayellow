@@ -97,6 +97,13 @@ h1 {
   color: #cbc6bb;
 }
 
+.connection small {
+  padding-left: 8px;
+  border-left: 1px solid rgba(244, 241, 234, 0.14);
+  color: #928c82;
+  white-space: nowrap;
+}
+
 .connection.connected {
   color: #8de0a1;
 }

@@ -1,6 +1,14 @@
 import { Pause, Play, RadioTower } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GatewayClient, type Axis, type GatewayPayload, type RiderConfigPayload, type RiderId } from "./api/gatewayClient";
+import {
+  GatewayClient,
+  gatewayEndpointLabel,
+  resolveGatewayUrl,
+  type Axis,
+  type GatewayPayload,
+  type RiderConfigPayload,
+  type RiderId,
+} from "./api/gatewayClient";
 import { AudioEngine } from "./audio/engine";
 import type { TrackSpeeds } from "./audio/types";
 import { RiderPanel } from "./components/RiderPanel";
@@ -79,6 +87,8 @@ export function App() {
   const [syncMode, setSyncMode] = useState<SyncMode>("experiment");
   const [songId, setSongId] = useState<SongId>("magic-potion");
   const currentSong = useMemo(() => findSong(songId), [songId]);
+  const gatewayUrl = useMemo(() => resolveGatewayUrl(), []);
+  const gatewayLabel = useMemo(() => gatewayEndpointLabel(gatewayUrl), [gatewayUrl]);
   const experimentMode = syncMode === "experiment";
 
   const rider1Playback = mapCadenceToPlayback({
@@ -95,11 +105,11 @@ export function App() {
   });
 
   useEffect(() => {
-    const client = new GatewayClient("ws://127.0.0.1:8765", setGatewayState, setConnectionStatus);
+    const client = new GatewayClient(gatewayUrl, setGatewayState, setConnectionStatus);
     client.connect();
     clientRef.current = client;
     return () => client.close();
-  }, []);
+  }, [gatewayUrl]);
 
   useEffect(() => {
     gatewayRef.current = gatewayState;
@@ -237,9 +247,10 @@ export function App() {
           <h1>双人骑行音乐控制台</h1>
         </div>
         <div className="header-actions">
-          <div className={`connection ${connectionStatus}`}>
+          <div className={`connection ${connectionStatus}`} title={`网关 ${gatewayUrl}`}>
             <RadioTower size={16} />
             <span>{connectionStatus === "connected" ? "网关在线" : connectionStatus === "connecting" ? "连接中" : "网关离线"}</span>
+            <small>{gatewayLabel}</small>
           </div>
           <button className="primary" onClick={audioRunning ? stopAudio : startAudio}>
             {audioRunning ? <Pause size={18} /> : <Play size={18} />}
