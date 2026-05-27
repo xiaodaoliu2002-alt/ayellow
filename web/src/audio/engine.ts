@@ -47,6 +47,7 @@ export class AudioEngine {
   private trackOrder: StemTrackId[] = [];
   private frame: number | null = null;
   private lastFrameTime = 0;
+  private duckUntilTime = 0;
 
   async start(stems: StemTrackConfig[]): Promise<void> {
     this.stop();
@@ -135,35 +136,63 @@ export class AudioEngine {
     }
   }
 
-  playStageCue(kind: ChallengeCueKind): void {
+  playStageCue(kind: ChallengeCueKind, guideBpm = 110): void {
     if (!this.context || !this.cueGain) {
       return;
     }
     const now = this.context.currentTime + 0.03;
+    if (kind === "unlock") {
+      this.playSparkle(now, 0.5);
+      return;
+    }
     if (kind === "speedUp") {
-      this.playTone(84, now, 0.12, 0.55);
-      this.playTone(91, now + 0.14, 0.16, 0.5);
-      speak("加速！");
-      this.playPulseTrain(now + 0.46, 15, 0.24, 92);
+      this.playRiser(now);
+      speak("加速冲冲冲！");
+      this.playPulseTrain(now + 0.62, 15, guideBpm, 86, "up");
       return;
     }
     if (kind === "slowDown") {
-      this.playTone(79, now, 0.14, 0.55);
-      this.playTone(72, now + 0.16, 0.2, 0.52);
-      speak("减速！");
-      this.playPulseTrain(now + 0.46, 15, 0.42, 64);
+      this.playDowner(now);
+      speak("减速放轻松");
+      this.playPulseTrain(now + 0.62, 15, guideBpm, 62, "down");
       return;
     }
 
-    this.playTone(72, now, 0.18, 0.5);
-    this.playTone(79, now + 0.08, 0.22, 0.44);
-    this.playTone(84, now + 0.16, 0.42, 0.5);
+    this.playSuccess(now);
   }
 
-  private playPulseTrain(startTime: number, count: number, intervalSeconds: number, note: number): void {
+  private playPulseTrain(startTime: number, count: number, bpm: number, note: number, direction: "up" | "down"): void {
+    const intervalSeconds = 60 / clamp(bpm, 60, 180);
+    this.duckUntilTime = Math.max(this.duckUntilTime, startTime + count * intervalSeconds + 0.9);
     for (let index = 0; index < count; index += 1) {
-      this.playTone(note, startTime + index * intervalSeconds, 0.055, 0.42);
+      const pitch = direction === "up" ? note + (index % 3) * 2 : note - (index % 3) * 2;
+      this.playTone(pitch, startTime + index * intervalSeconds, Math.min(0.12, intervalSeconds * 0.38), 0.32);
     }
+  }
+
+  private playSparkle(startTime: number, velocity: number): void {
+    this.playTone(76, startTime, 0.18, velocity * 0.55);
+    this.playTone(83, startTime + 0.08, 0.22, velocity * 0.48);
+    this.playTone(88, startTime + 0.18, 0.34, velocity * 0.42);
+  }
+
+  private playRiser(startTime: number): void {
+    this.playTone(72, startTime, 0.18, 0.34);
+    this.playTone(79, startTime + 0.1, 0.2, 0.38);
+    this.playTone(86, startTime + 0.22, 0.28, 0.42);
+  }
+
+  private playDowner(startTime: number): void {
+    this.playTone(74, startTime, 0.2, 0.34);
+    this.playTone(67, startTime + 0.12, 0.24, 0.32);
+    this.playTone(62, startTime + 0.26, 0.36, 0.3);
+  }
+
+  private playSuccess(startTime: number): void {
+    this.playTone(72, startTime, 0.2, 0.38);
+    this.playTone(76, startTime + 0.08, 0.24, 0.34);
+    this.playTone(79, startTime + 0.16, 0.3, 0.36);
+    this.playTone(84, startTime + 0.26, 0.52, 0.42);
   }
 
   private playTone(note: number, startTime: number, duration: number, velocity: number): void {
@@ -172,12 +201,18 @@ export class AudioEngine {
     }
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
-    oscillator.type = "triangle";
+    const filter = this.context.createBiquadFilter();
+    oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(440 * 2 ** ((note - 69) / 12), startTime);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(3600, startTime);
+    filter.Q.setValueAtTime(0.5, startTime);
     gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, velocity), startTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, velocity), startTime + 0.018);
+    gain.gain.setValueAtTime(Math.max(0.0001, velocity * 0.82), startTime + Math.max(0.02, duration * 0.35));
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-    oscillator.connect(gain);
+    oscillator.connect(filter);
+    filter.connect(gain);
     gain.connect(this.cueGain);
     oscillator.start(startTime);
     oscillator.stop(startTime + duration + 0.04);
@@ -188,6 +223,7 @@ export class AudioEngine {
     this.lastFrameTime = time;
     const speedEase = 1 - Math.exp(-dtSeconds / 0.65);
     const volumeEase = 1 - Math.exp(-dtSeconds / 0.22);
+    const duckFactor = this.context && this.context.currentTime < this.duckUntilTime ? 0.38 : 1;
 
     for (const runtime of this.tracks.values()) {
       runtime.currentSpeed += (runtime.targetSpeed - runtime.currentSpeed) * speedEase;
@@ -195,7 +231,7 @@ export class AudioEngine {
       const nextSpeed = clamp(runtime.currentSpeed, SPEED_MIN, SPEED_MAX);
       runtime.element.playbackRate = nextSpeed;
       runtime.element.defaultPlaybackRate = nextSpeed;
-      runtime.element.volume = clamp(runtime.currentVolume, 0, 1);
+      runtime.element.volume = clamp(runtime.currentVolume * duckFactor, 0, 1);
     }
 
     this.frame = window.requestAnimationFrame((nextTime) => this.tick(nextTime));

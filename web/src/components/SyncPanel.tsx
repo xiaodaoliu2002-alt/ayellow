@@ -8,6 +8,7 @@ interface SyncPanelProps {
 }
 
 export function SyncPanel({ sync, challenge }: SyncPanelProps) {
+  const holding = challenge.holdSecondsRemaining > 0;
   const progress = challenge.stage === 4 ? 1 : challenge.progressSeconds / challenge.stageSeconds;
 
   return (
@@ -27,7 +28,11 @@ export function SyncPanel({ sync, challenge }: SyncPanelProps) {
       <div className="sync-details">
         <span>
           <Timer size={15} />
-          {challenge.stage === 4 ? "挑战完成" : `本阶段 ${Math.ceil(challenge.stageSeconds - challenge.progressSeconds)}s`}
+          {challenge.stage === 4
+            ? "挑战完成"
+            : holding
+              ? `稳定 ${Math.ceil(challenge.holdSecondsRemaining)}s`
+              : `本阶段 ${Math.ceil(challenge.stageSeconds - challenge.progressSeconds)}s`}
         </span>
         <span>
           <Zap size={15} />

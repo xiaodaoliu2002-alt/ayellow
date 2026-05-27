@@ -1,7 +1,7 @@
 import type { SongConfig, StemTrackId } from "../music/songCatalog";
 
 export type ChallengeStage = 1 | 2 | 3 | 4;
-export type ChallengeCueKind = "speedUp" | "slowDown" | "success";
+export type ChallengeCueKind = "unlock" | "speedUp" | "slowDown" | "success";
 
 export interface ChallengeCue {
   kind: ChallengeCueKind;
@@ -11,6 +11,7 @@ export interface ChallengeState {
   stage: ChallengeStage;
   progressSeconds: number;
   stageSeconds: number;
+  holdSecondsRemaining: number;
   activeTracks: StemTrackId[];
   layerVolumes: Record<StemTrackId, number>;
   cue: ChallengeCue | null;
@@ -23,6 +24,7 @@ export interface ChallengeUpdateInput {
   rider2Active: boolean;
   song: SongConfig;
   stageSeconds?: number;
+  holdSeconds?: number;
   regressRate?: number;
 }
 
@@ -69,6 +71,7 @@ export function createChallengeState(song: SongConfig, stageSeconds = 30): Chall
     stage: 1,
     progressSeconds: 0,
     stageSeconds,
+    holdSecondsRemaining: 0,
     activeTracks,
     layerVolumes: volumesForTracks(activeTracks, song, false, false),
     cue: null,
@@ -94,6 +97,7 @@ function cueForStage(stage: ChallengeStage): ChallengeCue | null {
 
 export function updateChallengeState(previous: ChallengeState, input: ChallengeUpdateInput): ChallengeState {
   const stageSeconds = input.stageSeconds ?? previous.stageSeconds;
+  const holdSeconds = input.holdSeconds ?? 8;
   const dtSeconds = Math.max(0, input.dtSeconds);
   const ridersActive = input.rider1Active && input.rider2Active;
 
@@ -103,8 +107,22 @@ export function updateChallengeState(previous: ChallengeState, input: ChallengeU
       ...previous,
       activeTracks,
       progressSeconds: stageSeconds,
+      holdSecondsRemaining: 0,
       layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
       cue: null,
+    };
+  }
+
+  if (previous.holdSecondsRemaining > 0) {
+    const holdSecondsRemaining = Math.max(0, previous.holdSecondsRemaining - dtSeconds);
+    const activeTracks = tracksForStage(input.song, previous.stage);
+    return {
+      ...previous,
+      activeTracks,
+      holdSecondsRemaining,
+      progressSeconds: 0,
+      layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
+      cue: holdSecondsRemaining === 0 ? cueForStage(previous.stage) : null,
     };
   }
 
@@ -115,13 +133,15 @@ export function updateChallengeState(previous: ChallengeState, input: ChallengeU
   if (nextProgress >= stageSeconds) {
     const stage = nextStage(previous.stage);
     const activeTracks = tracksForStage(input.song, stage);
+    const holdSecondsRemaining = stage === 2 || stage === 3 ? holdSeconds : 0;
     return {
       stage,
       progressSeconds: stage === 4 ? stageSeconds : 0,
       stageSeconds,
+      holdSecondsRemaining,
       activeTracks,
       layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
-      cue: cueForStage(stage),
+      cue: holdSecondsRemaining > 0 ? { kind: "unlock" } : cueForStage(stage),
     };
   }
 
@@ -130,6 +150,7 @@ export function updateChallengeState(previous: ChallengeState, input: ChallengeU
     ...previous,
     progressSeconds: nextProgress,
     stageSeconds,
+    holdSecondsRemaining: 0,
     activeTracks,
     layerVolumes: volumesForTracks(activeTracks, input.song, input.rider1Active, input.rider2Active),
     cue: null,

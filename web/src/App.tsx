@@ -47,12 +47,25 @@ type SyncMode = "experiment" | "ride";
 const RIDE_START_CADENCE_RPM = 30;
 const defaultSong = findSong("magic-potion");
 
+function stageSpeeds(stage: ChallengeState["stage"], drumSpeed: number, guitarSpeed: number): TrackSpeeds {
+  return stage === 4
+    ? { drums: 1, guitar: 1, bass: 1, other: 1, vocals: 1 }
+    : {
+        drums: drumSpeed,
+        guitar: guitarSpeed,
+        bass: drumSpeed,
+        other: drumSpeed,
+        vocals: drumSpeed,
+      };
+}
+
 export function App() {
   const engineRef = useRef<AudioEngine | null>(null);
   const clientRef = useRef<GatewayClient | null>(null);
   const gatewayRef = useRef<GatewayPayload>(defaultGatewayState);
   const syncRef = useRef<SyncState>(createSyncState());
   const challengeRef = useRef<ChallengeState>(createChallengeState(defaultSong));
+  const heldSpeedsRef = useRef<TrackSpeeds | null>(null);
   const [gatewayState, setGatewayState] = useState<GatewayPayload>(defaultGatewayState);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "offline">("offline");
   const [riderConfig, setRiderConfig] = useState(defaultConfig);
@@ -62,6 +75,7 @@ export function App() {
   const [cadenceMultiplier, setCadenceMultiplier] = useState(3);
   const [speedIntensity, setSpeedIntensity] = useState(1.35);
   const [syncWindow, setSyncWindow] = useState(10);
+  const [guideBpm, setGuideBpm] = useState(110);
   const [syncMode, setSyncMode] = useState<SyncMode>("experiment");
   const [songId, setSongId] = useState<SongId>("magic-potion");
   const currentSong = useMemo(() => findSong(songId), [songId]);
@@ -98,6 +112,7 @@ export function App() {
   useEffect(() => {
     const resetSync = createSyncState();
     const resetChallenge = createChallengeState(currentSong);
+    heldSpeedsRef.current = null;
     syncRef.current = resetSync;
     challengeRef.current = resetChallenge;
     setSync(resetSync);
@@ -118,6 +133,18 @@ export function App() {
       const current = gatewayRef.current;
       const effectiveCadence1 = current.riders.user1.cadenceRpm * cadenceMultiplier;
       const effectiveCadence2 = current.riders.user2.cadenceRpm * cadenceMultiplier;
+      const rider1PlaybackNow = mapCadenceToPlayback({
+        cadenceRpm: current.riders.user1.cadenceRpm,
+        baselineCadenceRpm: current.riders.user1.baselineCadenceRpm,
+        cadenceMultiplier,
+        speedIntensity,
+      });
+      const rider2PlaybackNow = mapCadenceToPlayback({
+        cadenceRpm: current.riders.user2.cadenceRpm,
+        baselineCadenceRpm: current.riders.user2.baselineCadenceRpm,
+        cadenceMultiplier,
+        speedIntensity,
+      });
       const rider1Active = current.riders.user1.online && effectiveCadence1 >= RIDE_START_CADENCE_RPM;
       const rider2Active = current.riders.user2.online && effectiveCadence2 >= RIDE_START_CADENCE_RPM;
       const rider1CadenceForSync = experimentMode ? effectiveCadence1 : current.riders.user1.cadenceRpm;
@@ -153,12 +180,19 @@ export function App() {
       setSync(nextSync);
       setChallenge(nextChallenge);
       if (nextChallenge.cue) {
+        if (nextChallenge.cue.kind === "unlock") {
+          heldSpeedsRef.current = stageSpeeds(
+            nextChallenge.stage,
+            rider1PlaybackNow.valid ? rider1PlaybackNow.speedRatio : 1,
+            rider2PlaybackNow.valid ? rider2PlaybackNow.speedRatio : 1,
+          );
+        }
         engineRef.current?.syncToStem("drums");
-        engineRef.current?.playStageCue(nextChallenge.cue.kind);
+        engineRef.current?.playStageCue(nextChallenge.cue.kind, guideBpm);
       }
     }, 250);
     return () => window.clearInterval(timer);
-  }, [audioRunning, cadenceMultiplier, currentSong, experimentMode, syncWindow]);
+  }, [audioRunning, cadenceMultiplier, currentSong, experimentMode, guideBpm, speedIntensity, syncWindow]);
 
   useEffect(() => {
     if (!audioRunning) {
@@ -166,19 +200,12 @@ export function App() {
     }
     const drumSpeed = rider1Playback.valid ? rider1Playback.speedRatio : 1;
     const guitarSpeed = rider2Playback.valid ? rider2Playback.speedRatio : 1;
-    const speeds: TrackSpeeds =
-      challenge.stage === 4
-        ? { drums: 1, guitar: 1, bass: 1, other: 1, vocals: 1 }
-        : {
-            drums: drumSpeed,
-            guitar: guitarSpeed,
-            bass: drumSpeed,
-            other: drumSpeed,
-            vocals: drumSpeed,
-          };
+    const speeds = challenge.holdSecondsRemaining > 0 && heldSpeedsRef.current
+      ? heldSpeedsRef.current
+      : stageSpeeds(challenge.stage, drumSpeed, guitarSpeed);
     engineRef.current?.setTrackSpeeds(speeds);
     engineRef.current?.setLayerVolumes(challenge.layerVolumes);
-  }, [audioRunning, challenge.layerVolumes, challenge.stage, rider1Playback, rider2Playback]);
+  }, [audioRunning, challenge.holdSecondsRemaining, challenge.layerVolumes, challenge.stage, rider1Playback, rider2Playback]);
 
   const setConfig = (id: RiderId, next: RiderConfigPayload) => {
     setRiderConfig((current) => ({ ...current, [id]: next }));
@@ -299,6 +326,18 @@ export function App() {
               onChange={(event) => setSpeedIntensity(Number(event.target.value))}
             />
             <strong>{speedIntensity.toFixed(2)}x</strong>
+          </label>
+          <label className="range-row">
+            <span>提示BPM</span>
+            <input
+              type="range"
+              min={70}
+              max={150}
+              step={1}
+              value={guideBpm}
+              onChange={(event) => setGuideBpm(Number(event.target.value))}
+            />
+            <strong>{guideBpm}</strong>
           </label>
           <label className="range-row">
             <span>同步区间</span>
