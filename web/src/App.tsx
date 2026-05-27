@@ -10,6 +10,7 @@ import {
   type RiderId,
 } from "./api/gatewayClient";
 import { AudioEngine } from "./audio/engine";
+import type { GuideBpmSettings } from "./audio/cues";
 import type { TrackSpeeds } from "./audio/types";
 import { RiderPanel } from "./components/RiderPanel";
 import { SyncPanel } from "./components/SyncPanel";
@@ -83,12 +84,17 @@ export function App() {
   const [cadenceMultiplier, setCadenceMultiplier] = useState(3);
   const [speedIntensity, setSpeedIntensity] = useState(1.35);
   const [syncWindow, setSyncWindow] = useState(10);
-  const [guideBpm, setGuideBpm] = useState(110);
+  const [speedUpGuideBpm, setSpeedUpGuideBpm] = useState(124);
+  const [slowDownGuideBpm, setSlowDownGuideBpm] = useState(86);
   const [syncMode, setSyncMode] = useState<SyncMode>("experiment");
   const [songId, setSongId] = useState<SongId>("magic-potion");
   const currentSong = useMemo(() => findSong(songId), [songId]);
   const gatewayUrl = useMemo(() => resolveGatewayUrl(), []);
   const gatewayLabel = useMemo(() => gatewayEndpointLabel(gatewayUrl), [gatewayUrl]);
+  const guideBpm = useMemo<GuideBpmSettings>(
+    () => ({ speedUp: speedUpGuideBpm, slowDown: slowDownGuideBpm }),
+    [slowDownGuideBpm, speedUpGuideBpm],
+  );
   const experimentMode = syncMode === "experiment";
 
   const rider1Playback = mapCadenceToPlayback({
@@ -339,16 +345,28 @@ export function App() {
             <strong>{speedIntensity.toFixed(2)}x</strong>
           </label>
           <label className="range-row">
-            <span>提示BPM</span>
+            <span>加速提示</span>
             <input
               type="range"
-              min={70}
-              max={150}
+              min={80}
+              max={170}
               step={1}
-              value={guideBpm}
-              onChange={(event) => setGuideBpm(Number(event.target.value))}
+              value={speedUpGuideBpm}
+              onChange={(event) => setSpeedUpGuideBpm(Number(event.target.value))}
             />
-            <strong>{guideBpm}</strong>
+            <strong>{speedUpGuideBpm}</strong>
+          </label>
+          <label className="range-row">
+            <span>减速提示</span>
+            <input
+              type="range"
+              min={55}
+              max={135}
+              step={1}
+              value={slowDownGuideBpm}
+              onChange={(event) => setSlowDownGuideBpm(Number(event.target.value))}
+            />
+            <strong>{slowDownGuideBpm}</strong>
           </label>
           <label className="range-row">
             <span>同步区间</span>

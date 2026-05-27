@@ -1,4 +1,5 @@
 import type { TrackSpeeds, TrackVolumes } from "./types";
+import { cueAssetForKind, guideBpmForKind, type GuideBpmSettings } from "./cues";
 import type { ChallengeCueKind } from "../core/challengeState";
 import type { StemTrackConfig, StemTrackId } from "../music/songCatalog";
 
@@ -17,6 +18,11 @@ type StemRuntime = StemTrackConfig & {
 
 const SPEED_MIN = 0.5;
 const SPEED_MAX = 1.75;
+const CUE_KINDS: ChallengeCueKind[] = ["unlock", "speedUp", "slowDown", "success"];
+const DEFAULT_GUIDE_BPM: GuideBpmSettings = { speedUp: 124, slowDown: 86 };
+const GUIDE_PULSE_COUNT = 15;
+const CUE_DUCK_SECONDS = 2.4;
+const DUCK_FACTOR = 0.22;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -28,21 +34,10 @@ function applyPitchPreservation(element: PitchPreservingAudio): void {
   element.webkitPreservesPitch = true;
 }
 
-function speak(text: string): void {
-  if (!("speechSynthesis" in window)) {
-    return;
-  }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "zh-CN";
-  utterance.rate = 1.08;
-  utterance.volume = 1;
-  window.speechSynthesis.speak(utterance);
-}
-
 export class AudioEngine {
   private context: AudioContext | null = null;
   private cueGain: GainNode | null = null;
+  private cueTemplates: Map<ChallengeCueKind, HTMLAudioElement> = new Map();
   private tracks: Map<StemTrackId, StemRuntime> = new Map();
   private trackOrder: StemTrackId[] = [];
   private frame: number | null = null;
@@ -54,12 +49,13 @@ export class AudioEngine {
     if (!this.context) {
       this.context = new AudioContext();
       this.cueGain = this.context.createGain();
-      this.cueGain.gain.value = 0.8;
+      this.cueGain.gain.value = 1;
       this.cueGain.connect(this.context.destination);
     }
     if (this.context.state === "suspended") {
       await this.context.resume();
     }
+    this.prepareCueAssets();
 
     this.trackOrder = stems.map((stem) => stem.id);
     for (const stem of stems) {
@@ -136,86 +132,104 @@ export class AudioEngine {
     }
   }
 
-  playStageCue(kind: ChallengeCueKind, guideBpm = 110): void {
+  playStageCue(kind: ChallengeCueKind, guideBpm: GuideBpmSettings = DEFAULT_GUIDE_BPM): void {
     if (!this.context || !this.cueGain) {
       return;
     }
     const now = this.context.currentTime + 0.03;
-    if (kind === "unlock") {
-      this.playSparkle(now, 0.5);
-      return;
-    }
-    if (kind === "speedUp") {
-      this.playRiser(now);
-      speak("加速冲冲冲！");
-      this.playPulseTrain(now + 0.62, 15, guideBpm, 86, "up");
-      return;
-    }
-    if (kind === "slowDown") {
-      this.playDowner(now);
-      speak("减速放轻松");
-      this.playPulseTrain(now + 0.62, 15, guideBpm, 62, "down");
-      return;
-    }
+    this.duckBackgroundUntil(now + CUE_DUCK_SECONDS);
+    this.playCueAsset(kind);
 
-    this.playSuccess(now);
+    const bpm = guideBpmForKind(kind, guideBpm);
+    if (bpm === null) {
+      return;
+    }
+    this.playPulseTrain(now + 0.9, GUIDE_PULSE_COUNT, bpm, kind === "speedUp" ? "up" : "down");
   }
 
-  private playPulseTrain(startTime: number, count: number, bpm: number, note: number, direction: "up" | "down"): void {
+  private prepareCueAssets(): void {
+    for (const kind of CUE_KINDS) {
+      if (!this.cueTemplates.has(kind)) {
+        const audio = new Audio(cueAssetForKind(kind));
+        audio.preload = "auto";
+        audio.volume = 1;
+        this.cueTemplates.set(kind, audio);
+      }
+    }
+  }
+
+  private playCueAsset(kind: ChallengeCueKind): void {
+    const template = this.cueTemplates.get(kind) ?? new Audio(cueAssetForKind(kind));
+    const cue = template.cloneNode(true) as HTMLAudioElement;
+    cue.volume = 1;
+    cue.currentTime = 0;
+    void cue.play().catch(() => {
+      this.playGuideHit(this.context?.currentTime ?? 0, kind === "slowDown" ? "down" : "up", true);
+    });
+  }
+
+  private duckBackgroundUntil(untilTime: number): void {
+    this.duckUntilTime = Math.max(this.duckUntilTime, untilTime);
+  }
+
+  private playPulseTrain(startTime: number, count: number, bpm: number, direction: "up" | "down"): void {
     const intervalSeconds = 60 / clamp(bpm, 60, 180);
-    this.duckUntilTime = Math.max(this.duckUntilTime, startTime + count * intervalSeconds + 0.9);
+    this.duckBackgroundUntil(startTime + count * intervalSeconds + 0.9);
     for (let index = 0; index < count; index += 1) {
-      const pitch = direction === "up" ? note + (index % 3) * 2 : note - (index % 3) * 2;
-      this.playTone(pitch, startTime + index * intervalSeconds, Math.min(0.12, intervalSeconds * 0.38), 0.32);
+      this.playGuideHit(startTime + index * intervalSeconds, direction, index % 4 === 0);
     }
   }
 
-  private playSparkle(startTime: number, velocity: number): void {
-    this.playTone(76, startTime, 0.18, velocity * 0.55);
-    this.playTone(83, startTime + 0.08, 0.22, velocity * 0.48);
-    this.playTone(88, startTime + 0.18, 0.34, velocity * 0.42);
-  }
-
-  private playRiser(startTime: number): void {
-    this.playTone(72, startTime, 0.18, 0.34);
-    this.playTone(79, startTime + 0.1, 0.2, 0.38);
-    this.playTone(86, startTime + 0.22, 0.28, 0.42);
-  }
-
-  private playDowner(startTime: number): void {
-    this.playTone(74, startTime, 0.2, 0.34);
-    this.playTone(67, startTime + 0.12, 0.24, 0.32);
-    this.playTone(62, startTime + 0.26, 0.36, 0.3);
-  }
-
-  private playSuccess(startTime: number): void {
-    this.playTone(72, startTime, 0.2, 0.38);
-    this.playTone(76, startTime + 0.08, 0.24, 0.34);
-    this.playTone(79, startTime + 0.16, 0.3, 0.36);
-    this.playTone(84, startTime + 0.26, 0.52, 0.42);
-  }
-
-  private playTone(note: number, startTime: number, duration: number, velocity: number): void {
+  private playGuideHit(startTime: number, direction: "up" | "down", accented: boolean): void {
     if (!this.context || !this.cueGain) {
       return;
     }
+    const frequency = direction === "up" ? 1280 : 760;
+    const duration = accented ? 0.14 : 0.1;
+    const velocity = accented ? 0.95 : 0.74;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
     const filter = this.context.createBiquadFilter();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(440 * 2 ** ((note - 69) / 12), startTime);
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(3600, startTime);
-    filter.Q.setValueAtTime(0.5, startTime);
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(frequency, startTime);
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(frequency, startTime);
+    filter.Q.setValueAtTime(10, startTime);
     gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, velocity), startTime + 0.018);
-    gain.gain.setValueAtTime(Math.max(0.0001, velocity * 0.82), startTime + Math.max(0.02, duration * 0.35));
+    gain.gain.exponentialRampToValueAtTime(velocity, startTime + 0.006);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
     oscillator.connect(filter);
     filter.connect(gain);
     gain.connect(this.cueGain);
     oscillator.start(startTime);
-    oscillator.stop(startTime + duration + 0.04);
+    oscillator.stop(startTime + duration + 0.02);
+    this.playNoiseClick(startTime, accented ? 0.32 : 0.22);
+  }
+
+  private playNoiseClick(startTime: number, velocity: number): void {
+    if (!this.context || !this.cueGain) {
+      return;
+    }
+    const duration = 0.045;
+    const frameCount = Math.ceil(this.context.sampleRate * duration);
+    const buffer = this.context.createBuffer(1, frameCount, this.context.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let index = 0; index < frameCount; index += 1) {
+      const fade = 1 - index / frameCount;
+      samples[index] = (Math.random() * 2 - 1) * fade * fade;
+    }
+    const source = this.context.createBufferSource();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    filter.type = "highpass";
+    filter.frequency.setValueAtTime(2800, startTime);
+    gain.gain.setValueAtTime(velocity, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.cueGain);
+    source.start(startTime);
   }
 
   private tick(time: number): void {
@@ -223,7 +237,7 @@ export class AudioEngine {
     this.lastFrameTime = time;
     const speedEase = 1 - Math.exp(-dtSeconds / 0.65);
     const volumeEase = 1 - Math.exp(-dtSeconds / 0.22);
-    const duckFactor = this.context && this.context.currentTime < this.duckUntilTime ? 0.38 : 1;
+    const duckFactor = this.context && this.context.currentTime < this.duckUntilTime ? DUCK_FACTOR : 1;
 
     for (const runtime of this.tracks.values()) {
       runtime.currentSpeed += (runtime.targetSpeed - runtime.currentSpeed) * speedEase;
