@@ -75,6 +75,14 @@ class CyclingSynthServer:
             self.gateway.update_config(message)
             if self.verbose:
                 print(f"config {message.get('riders', {})}")
+        elif message.get("type") == "animation":
+            self.gateway.update_animation(message)
+            if self.verbose:
+                print(f"animation {message.get('animation', {})}")
+        elif message.get("type") == "radiusMapping":
+            self.gateway.update_radius_mapping(message)
+            if self.verbose:
+                print(f"radiusMapping {message.get('radiusMapping', {})}")
 
     async def _broadcast_loop(self) -> None:
         while True:
@@ -84,10 +92,12 @@ class CyclingSynthServer:
 
             payload = json.dumps(self.gateway.to_payload())
             stale_clients: list[Any] = []
-            for client in self.clients:
+            for client in list(self.clients):
                 try:
                     await client.send(payload)
-                except websockets.ConnectionClosed:
+                except Exception as exc:
+                    if self.verbose:
+                        print(f"websocket broadcast failed: {exc}")
                     stale_clients.append(client)
 
             for client in stale_clients:

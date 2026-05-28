@@ -25,11 +25,27 @@ export interface DiscoveredSensor {
   lastSeen: number;
 }
 
+export interface GatewayAnimationPayload {
+  stage: 1 | 2 | 3 | 4;
+  progress: number;
+  congratulations: "playing" | "idle";
+  stage4Video: "playing" | "idle";
+}
+
+export interface RadiusMappingPayload {
+  minRpm: number;
+  maxRpm: number;
+  minRadius: number;
+  maxRadius: number;
+}
+
 export interface GatewayPayload {
   type: "state";
   timestamp: number;
   riders: Record<RiderId, RiderPayload>;
   discoveredSensors: DiscoveredSensor[];
+  animation: GatewayAnimationPayload;
+  radiusMapping: RadiusMappingPayload;
 }
 
 export interface RiderConfigPayload {
@@ -118,6 +134,20 @@ export class GatewayClient {
       return;
     }
     this.socket.send(JSON.stringify({ type: "config", riders }));
+  }
+
+  sendAnimation(animation: Partial<GatewayAnimationPayload>): void {
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.socket.send(JSON.stringify({ type: "animation", animation }));
+  }
+
+  sendRadiusMapping(radiusMapping: RadiusMappingPayload): void {
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.socket.send(JSON.stringify({ type: "radiusMapping", radiusMapping }));
   }
 
   close(): void {

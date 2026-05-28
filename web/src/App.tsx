@@ -6,17 +6,21 @@ import {
   resolveGatewayUrl,
   type Axis,
   type GatewayPayload,
+  type RadiusMappingPayload,
   type RiderConfigPayload,
   type RiderId,
 } from "./api/gatewayClient";
 import { AudioEngine } from "./audio/engine";
 import type { GuideBpmSettings } from "./audio/cues";
 import type { TrackSpeeds } from "./audio/types";
+import { RadiusMappingPanel } from "./components/RadiusMappingPanel";
 import { RiderPanel } from "./components/RiderPanel";
 import { SyncPanel } from "./components/SyncPanel";
 import { TrackLayers } from "./components/TrackLayers";
 import { createChallengeState, updateChallengeState, type ChallengeState } from "./core/challengeState";
 import { mapCadenceToPlayback } from "./core/cadenceMapping";
+import { m5stackAnimationUpdate } from "./core/m5stackAnimationSignal";
+import { defaultRadiusMapping } from "./core/radiusMapping";
 import { createSyncState, updateSyncState, type SyncState } from "./core/syncState";
 import { findSong, SONGS, type SongId } from "./music/songCatalog";
 
@@ -45,6 +49,8 @@ const defaultGatewayState: GatewayPayload = {
     user2: defaultRider("user2"),
   },
   discoveredSensors: [],
+  animation: { stage: 1, progress: 0, congratulations: "idle", stage4Video: "idle" },
+  radiusMapping: defaultRadiusMapping,
 };
 
 const defaultConfig: Record<RiderId, RiderConfigPayload> = {
@@ -78,6 +84,7 @@ export function App() {
   const [gatewayState, setGatewayState] = useState<GatewayPayload>(defaultGatewayState);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "offline">("offline");
   const [riderConfig, setRiderConfig] = useState(defaultConfig);
+  const [radiusMapping, setRadiusMapping] = useState<RadiusMappingPayload>(defaultRadiusMapping);
   const [audioRunning, setAudioRunning] = useState(false);
   const [sync, setSync] = useState<SyncState>(() => createSyncState());
   const [challenge, setChallenge] = useState<ChallengeState>(() => createChallengeState(defaultSong));
@@ -124,6 +131,10 @@ export function App() {
   useEffect(() => {
     clientRef.current?.sendConfig(riderConfig);
   }, [riderConfig]);
+
+  useEffect(() => {
+    clientRef.current?.sendRadiusMapping(radiusMapping);
+  }, [radiusMapping]);
 
   useEffect(() => {
     const resetSync = createSyncState();
@@ -184,13 +195,15 @@ export function App() {
         historySeconds: experimentMode ? 4 : 8,
         requirePhase: !experimentMode,
       });
-      const nextChallenge = updateChallengeState(challengeRef.current, {
+      const previousChallenge = challengeRef.current;
+      const nextChallenge = updateChallengeState(previousChallenge, {
         dtSeconds: 0.25,
         synced: nextSync.synced,
         rider1Active,
         rider2Active,
         song: currentSong,
       });
+      clientRef.current?.sendAnimation(m5stackAnimationUpdate(previousChallenge, nextChallenge));
       syncRef.current = nextSync;
       challengeRef.current = nextChallenge;
       setSync(nextSync);
@@ -204,7 +217,8 @@ export function App() {
           );
         }
         engineRef.current?.syncToStem("drums");
-        engineRef.current?.playStageCue(nextChallenge.cue.kind, guideBpm);
+        const cue = engineRef.current?.playStageCue(nextChallenge.cue.kind, guideBpm);
+        cue?.addEventListener("ended", () => clientRef.current?.sendAnimation({ congratulations: "idle" }), { once: true });
       }
     }, 250);
     return () => window.clearInterval(timer);
@@ -286,6 +300,15 @@ export function App() {
           effectiveCadenceRpm={rider2Playback.effectiveCadenceRpm}
           config={riderConfig.user2}
           onConfigChange={(next) => setConfig("user2", next)}
+        />
+      </section>
+
+      <section className="lower-grid single">
+        <RadiusMappingPanel
+          mapping={radiusMapping}
+          user1CadenceRpm={gatewayState.riders.user1.cadenceRpm}
+          user2CadenceRpm={gatewayState.riders.user2.cadenceRpm}
+          onChange={setRadiusMapping}
         />
       </section>
 

@@ -279,6 +279,20 @@ input:focus {
   color: #b7b1a6;
 }
 
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mapping-preview {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: #cbc6bb;
+}
+
 .sync-panel {
   display: flex;
   flex-direction: column;

@@ -41,6 +41,38 @@ class GatewayState:
         }
     )
     discovered: dict[str, DiscoveredSensor] = field(default_factory=dict)
+    animation: dict[str, Any] = field(
+        default_factory=lambda: {"stage": 1, "progress": 0.0, "congratulations": "idle", "stage4Video": "idle"}
+    )
+    radius_mapping: dict[str, float | int] = field(
+        default_factory=lambda: {"minRpm": 0.0, "maxRpm": 15.0, "minRadius": 11, "maxRadius": 33}
+    )
+
+    def update_radius_mapping(self, message: dict[str, Any]) -> None:
+        mapping = message.get("radiusMapping", {})
+        for key in ("minRpm", "maxRpm"):
+            value = mapping.get(key)
+            if isinstance(value, (int, float)):
+                self.radius_mapping[key] = float(value)
+        for key in ("minRadius", "maxRadius"):
+            value = mapping.get(key)
+            if isinstance(value, (int, float)):
+                self.radius_mapping[key] = int(value)
+
+    def update_animation(self, message: dict[str, Any]) -> None:
+        animation = message.get("animation", {})
+        stage = animation.get("stage")
+        progress = animation.get("progress")
+        congratulations = animation.get("congratulations")
+        stage4_video = animation.get("stage4Video")
+        if stage in (1, 2, 3, 4):
+            self.animation["stage"] = stage
+        if isinstance(progress, (int, float)):
+            self.animation["progress"] = max(0.0, min(1.0, float(progress)))
+        if congratulations in ("playing", "idle"):
+            self.animation["congratulations"] = congratulations
+        if stage4_video in ("playing", "idle"):
+            self.animation["stage4Video"] = stage4_video
 
     def update_config(self, message: dict[str, Any]) -> None:
         riders_config = message.get("riders", {})
@@ -88,6 +120,8 @@ class GatewayState:
             "timestamp": payload_time,
             "riders": {rider_id: self._rider_payload(rider_id, payload_time) for rider_id in RIDER_IDS},
             "discoveredSensors": self._discovered_payload(payload_time),
+            "animation": dict(self.animation),
+            "radiusMapping": dict(self.radius_mapping),
         }
 
     def _bound_rider_for_ip(self, source_ip: str) -> str | None:

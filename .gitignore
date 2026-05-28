@@ -23,6 +23,13 @@ venv/
 .env.*
 !.env.example
 
+# M5Stack / PlatformIO local outputs
+.pio/
+m5stack_dual_balls/.pio/
+m5stack_dual_balls/data/*
+!m5stack_dual_balls/data/.gitkeep
+*.mjpeg
+
 # Editor files
 .idea/
 .vscode/

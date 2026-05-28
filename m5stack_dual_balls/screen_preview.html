@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>M5Stack Balls Screen Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      background: #111;
+      color: #fff;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+
+    main {
+      width: min(92vw, 760px);
+      display: grid;
+      gap: 20px;
+      justify-items: center;
+    }
+
+    .device {
+      padding: 18px;
+      border-radius: 28px;
+      background: linear-gradient(145deg, #2a2a2a, #050505);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), inset 0 0 0 2px #333;
+    }
+
+    canvas {
+      width: 640px;
+      height: 480px;
+      max-width: calc(92vw - 36px);
+      aspect-ratio: 4 / 3;
+      display: block;
+      image-rendering: pixelated;
+      border-radius: 6px;
+      background: #000;
+    }
+
+    .controls {
+      width: min(92vw, 640px);
+      display: grid;
+      gap: 14px;
+      padding: 18px;
+      border-radius: 18px;
+      background: #1d1d1d;
+      box-shadow: inset 0 0 0 1px #333;
+    }
+
+    label {
+      display: grid;
+      grid-template-columns: 150px 1fr 48px;
+      gap: 14px;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #9cff00;
+    }
+
+    button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 999px;
+      color: #071200;
+      background: linear-gradient(135deg, #dfff63, #64ffdc, #ff8bc8);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      box-shadow: 0 10px 26px rgba(156, 255, 0, 0.22);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .hint {
+      margin: 0;
+      color: #bbb;
+      font-size: 14px;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="device" aria-label="M5Stack 320 by 240 screen preview">
+      <canvas id="screen" width="320" height="240"></canvas>
+      <video id="stage4Video" src="C:/Users/X1 Yoga/Desktop/140deace81fac3f5ac60c60542b7616b.mjpeg" loop muted playsinline style="display:none"></video>
+    </section>
+
+    <section class="controls">
+      <label>
+        Game 球大小
+        <input id="gameRadius" type="range" min="11" max="33" value="23">
+        <span id="gameValue">23</span>
+      </label>
+      <label>
+        Connectivity 球大小
+        <input id="connectivityRadius" type="range" min="11" max="33" value="23">
+        <span id="connectivityValue">23</span>
+      </label>
+      <label>
+        动画速度
+        <input id="speed" type="range" min="0" max="100" value="45">
+        <span id="speedValue">45</span>
+      </label>
+      <button id="congratulationsButton" type="button">Congratulations</button>
+      <p class="hint" id="ayellowStatus">ayellow 速率检测：未连接</p>
+    </section>
+
+    <p class="hint">这是 M5Stack 320×240 屏幕模拟。先在这里调视觉和动画，满意后再同步到固件烧录。</p>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('screen');
+    const ctx = canvas.getContext('2d');
+    const congratulationsButton = document.getElementById('congratulationsButton');
+    const ayellowStatus = document.getElementById('ayellowStatus');
+    const stage4Video = document.getElementById('stage4Video');
+    const AYELLOW_GATEWAY_URL = `ws://${window.location.hostname || 'localhost'}:8765`;
+    const SCREEN_CENTER_X = 160;
+    const SCREEN_CENTER_Y = 120;
+    const BASE_RADIUS_MULTIPLIER = 3;
+    const SLIDER_GROWTH_MULTIPLIER = 4;
+    const EDGE_DISTANCE = 160;
+    const celebrationParticles = Array.from({ length: 34 }, (_, i) => {
+      const angle = (i / 34) * Math.PI * 2;
+      const outerRadius = 210 + (i % 5) * 22;
+      const clusterRadius = 7 + (i % 8) * 3.1;
+      const clusterAngle = angle * 2.35 + (i % 6) * 0.51;
+      return {
+        startX: SCREEN_CENTER_X + Math.cos(angle) * outerRadius,
+        startY: SCREEN_CENTER_Y + Math.sin(angle) * outerRadius * 0.78,
+        clusterRadius,
+        clusterAngle,
+        radius: 7 + (i % 7) * 2.1,
+        color: ['#ff2323', '#1678ff', '#ff9d00', '#ffe900', '#ff78b8', '#111111', '#ffffff'][i % 7],
+        accent: ['#ffffff', '#111111', '#00a7ff', '#ffea00', '#ff4aa2', '#ffffff', '#111111'][i % 7],
+        style: ['radialStripe', 'dotted', 'ring', 'wedge'][i % 4],
+        spin: 0.68 + (i % 9) * 0.09,
+      };
+    });
+    const congratulationsAnimation = {
+      mode: 'idle',
+      startedAt: 0,
+      entranceDuration: 900,
+      exitDuration: 780,
+    };
+    const ayellowAnimation = {
+      stage: 1,
+      progress: 0,
+      congratulations: 'idle',
+      stage4Video: 'idle',
+    };
+    const radiusMapping = {
+      minRpm: 0,
+      maxRpm: 15,
+      minRadius: 11,
+      maxRadius: 33,
+    };
+
+    const controls = {
+      gameRadius: document.getElementById('gameRadius'),
+      connectivityRadius: document.getElementById('connectivityRadius'),
+      speed: document.getElementById('speed'),
+    };
+
+    const labels = {
+      gameRadius: document.getElementById('gameValue'),
+      connectivityRadius: document.getElementById('connectivityValue'),
+      speed: document.getElementById('speedValue'),
+    };
+
+    const state = {
+      gameRadius: Number(controls.gameRadius.value),
+      connectivityRadius: Number(controls.connectivityRadius.value),
+      speed: Number(controls.speed.value),
+    };
+
+    const ayellowState = {
+      connected: false,
+      user1CadenceRpm: 0,
+      user2CadenceRpm: 0,
+    };
+
+    for (const key of Object.keys(controls)) {
+      controls[key].addEventListener('input', () => {
+        state[key] = Number(controls[key].value);
+        labels[key].textContent = controls[key].value;
+      });
+    }
+
+    congratulationsButton.addEventListener('click', toggleCongratulationsAnimation);
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function cadenceRpmToRadius(cadenceRpm) {
+      const rpmSpan = Math.max(1, radiusMapping.maxRpm - radiusMapping.minRpm);
+      const t = clamp((cadenceRpm - radiusMapping.minRpm) / rpmSpan, 0, 1);
+      return Math.round(radiusMapping.minRadius + t * (radiusMapping.maxRadius - radiusMapping.minRadius));
+    }
+
+    function setControlValue(key, value) {
+      state[key] = value;
+      controls[key].value = String(value);
+      labels[key].textContent = String(value);
+    }
+
+    function applyCongratulationsSignal(congratulations) {
+      if (congratulations === 'playing' && (congratulationsAnimation.mode === 'idle' || congratulationsAnimation.mode === 'exiting')) {
+        congratulationsAnimation.mode = 'entering';
+        congratulationsAnimation.startedAt = performance.now();
+        congratulationsButton.textContent = 'Exit Congratulations';
+      } else if (congratulations === 'idle' && congratulationsAnimation.mode !== 'idle' && congratulationsAnimation.mode !== 'exiting') {
+        congratulationsAnimation.mode = 'exiting';
+        congratulationsAnimation.startedAt = performance.now();
+        congratulationsButton.textContent = 'Congratulations';
+      }
+    }
+
+    function applyStage4VideoSignal(stage4VideoState) {
+      ayellowAnimation.stage4Video = stage4VideoState;
+      if (stage4VideoState === 'playing') {
+        void stage4Video.play().catch(() => {});
+      } else {
+        stage4Video.pause();
+        stage4Video.currentTime = 0;
+      }
+    }
+
+    function applyAyellowPayload(payload) {
+      const user1CadenceRpm = payload.riders.user1.cadenceRpm;
+      const user2CadenceRpm = payload.riders.user2.cadenceRpm;
+      ayellowState.user1CadenceRpm = user1CadenceRpm;
+      ayellowState.user2CadenceRpm = user2CadenceRpm;
+      setControlValue('gameRadius', cadenceRpmToRadius(user1CadenceRpm));
+      setControlValue('connectivityRadius', cadenceRpmToRadius(user2CadenceRpm));
+      if (payload.radiusMapping) {
+        radiusMapping.minRpm = payload.radiusMapping.minRpm ?? radiusMapping.minRpm;
+        radiusMapping.maxRpm = payload.radiusMapping.maxRpm ?? radiusMapping.maxRpm;
+        radiusMapping.minRadius = payload.radiusMapping.minRadius ?? radiusMapping.minRadius;
+        radiusMapping.maxRadius = payload.radiusMapping.maxRadius ?? radiusMapping.maxRadius;
+      }
+      if (payload.animation) {
+        // payload.animation.congratulations
+        ayellowAnimation.stage = payload.animation.stage ?? ayellowAnimation.stage;
+        ayellowAnimation.progress = clamp(payload.animation.progress ?? ayellowAnimation.progress, 0, 1);
+        if (payload.animation.congratulations) applyCongratulationsSignal(payload.animation.congratulations);
+        if (payload.animation.stage4Video) applyStage4VideoSignal(payload.animation.stage4Video);
+      }
+      ayellowStatus.textContent = `ayellow 速率检测：user1 ${Math.round(user1CadenceRpm)} rpm / user2 ${Math.round(user2CadenceRpm)} rpm`;
+    }
+
+    function connectAyellowGateway() {
+      const socket = new WebSocket(AYELLOW_GATEWAY_URL);
+      socket.addEventListener('open', () => {
+        ayellowState.connected = true;
+        ayellowStatus.textContent = 'ayellow 速率检测：已连接，等待数据';
+      });
+      socket.addEventListener('message', (event) => {
+        const payload = JSON.parse(event.data);
+        if (!payload.riders?.user1 || !payload.riders?.user2) return;
+        applyAyellowPayload(payload);
+      });
+      socket.addEventListener('close', () => {
+        ayellowState.connected = false;
+        ayellowStatus.textContent = 'ayellow 速率检测：未连接，使用手动滑块';
+      });
+      socket.addEventListener('error', () => {
+        ayellowStatus.textContent = 'ayellow 速率检测：连接失败，使用手动滑块';
+      });
+    }
+
+    connectAyellowGateway();
+
+    function easeInOutCubic(x) {
+      return x < 0.5 ? 4 * x * x * x : 1 - ((-2 * x + 2) ** 3) / 2;
+    }
+
+    function toggleCongratulationsAnimation() {
+      const now = performance.now();
+      if (congratulationsAnimation.mode === 'idle' || congratulationsAnimation.mode === 'exiting') {
+        congratulationsAnimation.mode = 'entering';
+        congratulationsAnimation.startedAt = now;
+        congratulationsButton.textContent = 'Exit Congratulations';
+      } else {
+        congratulationsAnimation.mode = 'exiting';
+        congratulationsAnimation.startedAt = now;
+        congratulationsButton.textContent = 'Congratulations';
+      }
+    }
+
+    function circleClip(x, y, radius, draw) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.clip();
+      draw();
+      ctx.restore();
+    }
+
+    function drawGameBall(x, y, radius, t) {
+      ctx.save();
+      ctx.fillStyle = '#FF8812';
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      circleClip(x, y, radius, () => {
+        ctx.strokeStyle = 'rgba(255, 220, 205, 0.88)';
+        ctx.lineWidth = Math.max(1.2, radius / 30);
+        const spin = t * 0.0011;
+        for (let i = 0; i < 4; i++) {
+          const yy = y + Math.sin(spin + i * 1.7) * radius * 0.42;
+          ctx.save();
+          ctx.translate(x, yy);
+          ctx.rotate(Math.sin(spin + i) * 0.35);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, radius * (0.58 + i * 0.08), Math.max(4, radius * 0.13), 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+        for (const anchor of [-0.52, 0.55]) {
+          for (let ring = 0; ring < 4; ring++) {
+            ctx.beginPath();
+            ctx.ellipse(x + Math.sin(spin + ring) * radius * 0.08, y + radius * anchor, radius * (0.12 + ring * 0.08), radius * (0.045 + ring * 0.028), 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+      });
+
+      ctx.strokeStyle = '#FFDCCD';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, radius - 0.75, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawConnectivityBall(x, y, radius, t) {
+      ctx.save();
+      ctx.fillStyle = '#9ED9D3';
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      circleClip(x, y, radius, () => {
+        ctx.strokeStyle = 'rgba(255, 178, 220, 0.9)';
+        ctx.lineWidth = Math.max(1.2, radius / 27);
+        const wobble = Math.sin(t * 0.0014) * radius * 0.1;
+        const spin = t * 0.0012 * (state.speed / 45);
+
+        for (let i = -radius + 8; i <= radius - 8; i += Math.max(9, radius / 5.2)) {
+          ctx.save();
+          ctx.translate(x, y + i);
+          ctx.rotate(Math.sin(spin + i * 0.07) * 0.18);
+          ctx.beginPath();
+          ctx.ellipse(wobble * Math.sin(i), 0, Math.sqrt(radius * radius - i * i), Math.max(5, radius / 9), 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        for (let i = 0; i < 6; i++) {
+          const offset = spin + i * 0.85;
+          ctx.beginPath();
+          for (let p = 0; p <= 1; p += 0.04) {
+            const yy = y - radius * 0.82 + p * radius * 1.64;
+            const xx = x + Math.sin(p * Math.PI * 2 + offset) * radius * 0.62;
+            if (p === 0) ctx.moveTo(xx, yy);
+            else ctx.lineTo(xx, yy);
+          }
+          ctx.stroke();
+        }
+      });
+
+      ctx.strokeStyle = '#CFF6F1';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, radius - 0.75, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function rotateAroundCenter(x, y, rotationAngle) {
+      const dx = x - SCREEN_CENTER_X;
+      const dy = y - SCREEN_CENTER_Y;
+      return {
+        x: SCREEN_CENTER_X + dx * Math.cos(rotationAngle) - dy * Math.sin(rotationAngle),
+        y: SCREEN_CENTER_Y + dx * Math.sin(rotationAngle) + dy * Math.cos(rotationAngle),
+      };
+    }
+
+    function contactGeometry(leftCenter, rightCenter, leftRadius, rightRadius) {
+      const dx = rightCenter.x - leftCenter.x;
+      const dy = rightCenter.y - leftCenter.y;
+      const distance = Math.hypot(dx, dy);
+      const contactDepth = Math.max(0, leftRadius + rightRadius - distance);
+      const contactNormal = { x: dx / distance, y: dy / distance };
+      const contactDistance = (distance * distance + leftRadius * leftRadius - rightRadius * rightRadius) / (distance * 2);
+      return {
+        contactDepth,
+        contactNormal,
+        contactPoint: {
+          x: leftCenter.x + contactNormal.x * contactDistance,
+          y: leftCenter.y + contactNormal.y * contactDistance,
+        },
+      };
+    }
+
+    function deformNearContact(rawX, rawY, center, radius, direction, contact, t) {
+      if (contact.contactDepth <= 0) return { x: rawX, y: rawY };
+
+      const localX = rawX - center.x;
+      const localY = rawY - center.y;
+      const tangent = { x: -direction.y, y: direction.x };
+      const front = localX * direction.x + localY * direction.y;
+      const lateral = localX * tangent.x + localY * tangent.y;
+      const contactWidth = Math.max(16, Math.sqrt(radius * contact.contactDepth) * 1.45);
+      const frontRange = Math.max(10, contact.contactDepth * 2.6);
+      const frontWeight = Math.max(0, 1 - Math.abs(radius - front) / frontRange);
+      const lateralWeight = Math.exp(-(lateral * lateral) / (contactWidth * contactWidth));
+      const weight = frontWeight * lateralWeight;
+      const squish = contact.contactDepth * 0.74 * weight;
+      const wobble = Math.sin(lateral * 0.09 + t * 0.006) * contact.contactDepth * 0.08 * weight;
+      const bulge = Math.sin((Math.abs(lateral) / contactWidth) * Math.PI) * contact.contactDepth * 0.18 * frontWeight;
+
+      return {
+        x: rawX - direction.x * squish + tangent.x * wobble + tangent.x * Math.sign(lateral) * bulge,
+        y: rawY - direction.y * squish + tangent.y * wobble + tangent.y * Math.sign(lateral) * bulge,
+      };
+    }
+
+    function jellyBoundary(center, radius, direction, contact, rotationAngle, t) {
+      ctx.beginPath();
+      const steps = 128;
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const rawX = center.x + Math.cos(a) * radius;
+        const rawY = center.y + Math.sin(a) * radius;
+        const deformed = deformNearContact(rawX, rawY, center, radius, direction, contact, t);
+        const p = rotateAroundCenter(deformed.x, deformed.y, rotationAngle);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+    }
+
+    function drawBallWithJellyBoundary(drawBall, center, radius, direction, contact, rotationAngle, t, strokeStyle) {
+      ctx.save();
+      jellyBoundary(center, radius, direction, contact, rotationAngle, t);
+      ctx.clip();
+      const p = rotateAroundCenter(center.x, center.y, rotationAngle);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(rotationAngle);
+      ctx.translate(-center.x, -center.y);
+      drawBall(center.x, center.y, radius, t);
+      ctx.restore();
+
+      ctx.save();
+      jellyBoundary(center, radius, direction, contact, rotationAngle, t);
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function displayRadius(value, homeValue) {
+      return homeValue * BASE_RADIUS_MULTIPLIER * 2 + (value - homeValue) * SLIDER_GROWTH_MULTIPLIER;
+    }
+
+    function drawJellyContactPair(gameDisplayRadius, connectivityDisplayRadius, rotationAngle, animatedT) {
+      const leftCenter = { x: SCREEN_CENTER_X - EDGE_DISTANCE, y: SCREEN_CENTER_Y };
+      const rightCenter = { x: SCREEN_CENTER_X + EDGE_DISTANCE, y: SCREEN_CENTER_Y };
+      const contact = contactGeometry(leftCenter, rightCenter, gameDisplayRadius, connectivityDisplayRadius);
+      const leftDirection = contact.contactNormal;
+      const rightDirection = { x: -contact.contactNormal.x, y: -contact.contactNormal.y };
+
+      drawBallWithJellyBoundary(drawGameBall, leftCenter, gameDisplayRadius, leftDirection, contact, rotationAngle, animatedT, '#FFDCCD');
+      drawBallWithJellyBoundary(drawConnectivityBall, rightCenter, connectivityDisplayRadius, rightDirection, contact, rotationAngle, animatedT, '#CFF6F1');
+
+      if (contact.contactDepth > 0) {
+        const tangent = { x: -contact.contactNormal.y, y: contact.contactNormal.x };
+        const contactLength = Math.sqrt(Math.min(gameDisplayRadius, connectivityDisplayRadius) * contact.contactDepth) * 1.18;
+        const wave = Math.sin(animatedT * 0.005) * contact.contactDepth * 0.08;
+        const a = rotateAroundCenter(contact.contactPoint.x - tangent.x * contactLength, contact.contactPoint.y - tangent.y * contactLength, rotationAngle);
+        const b = rotateAroundCenter(contact.contactPoint.x + contact.contactNormal.x * wave, contact.contactPoint.y + contact.contactNormal.y * wave, rotationAngle);
+        const c = rotateAroundCenter(contact.contactPoint.x + tangent.x * contactLength, contact.contactPoint.y + tangent.y * contactLength, rotationAngle);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.24)';
+        ctx.lineWidth = Math.min(7, 1 + contact.contactDepth / 20);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.quadraticCurveTo(b.x, b.y, c.x, c.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function drawRadialStripeRing(x, y, radius, rotation, color, accent) {
+      const segments = 22;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      for (let i = 0; i < segments; i++) {
+        const a0 = (i / segments) * Math.PI * 2;
+        const a1 = ((i + 0.58) / segments) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a0) * radius * 0.42, Math.sin(a0) * radius * 0.42);
+        ctx.arc(0, 0, radius, a0, a1);
+        ctx.lineTo(Math.cos(a1) * radius * 0.42, Math.sin(a1) * radius * 0.42);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 ? color : accent;
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawDottedRing(x, y, radius, rotation, color, accent) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(2, radius * 0.18);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.72, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        ctx.fillStyle = i % 2 ? accent : '#fff';
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * radius * 0.36, Math.sin(a) * radius * 0.36, radius * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawWedgeRing(x, y, radius, rotation, color, accent) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < 6; i++) {
+        const a0 = (i / 6) * Math.PI * 2;
+        const a1 = a0 + Math.PI / 6;
+        ctx.fillStyle = i % 2 ? accent : '#fff';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, a0, a1);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawGifStyleCircle(particle, x, y, scale, rotation) {
+      const radius = particle.radius * scale;
+      if (particle.style === 'radialStripe') {
+        drawRadialStripeRing(x, y, radius, rotation, particle.color, particle.accent);
+      } else if (particle.style === 'dotted') {
+        drawDottedRing(x, y, radius, rotation, particle.color, particle.accent);
+      } else if (particle.style === 'wedge') {
+        drawWedgeRing(x, y, radius, rotation, particle.color, particle.accent);
+      } else {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.fillStyle = particle.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = particle.accent;
+        ctx.lineWidth = Math.max(1, radius * 0.16);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function drawCongratulationsAnimation(t) {
+      if (congratulationsAnimation.mode === 'idle') return;
+
+      const elapsed = t - congratulationsAnimation.startedAt;
+      const { entranceDuration, exitDuration } = congratulationsAnimation;
+      let gather = 1;
+      let alpha = 1;
+      if (congratulationsAnimation.mode === 'entering') {
+        gather = easeInOutCubic(Math.min(1, elapsed / entranceDuration));
+        if (elapsed >= entranceDuration) congratulationsAnimation.mode = 'holding';
+      } else if (congratulationsAnimation.mode === 'holding') {
+        gather = 1;
+      } else if (congratulationsAnimation.mode === 'exiting') {
+        const progress = easeInOutCubic(Math.min(1, elapsed / exitDuration));
+        gather = 1 - progress;
+        alpha = 1 - progress * 0.55;
+        if (elapsed >= exitDuration) congratulationsAnimation.mode = 'idle';
+      }
+
+      const spin = t * 0.0032;
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.5 * gather})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = alpha;
+      for (const particle of celebrationParticles) {
+        const orbitAngle = particle.clusterAngle + spin * particle.spin;
+        const clusterPulse = particle.clusterRadius + Math.sin(t * 0.006 + particle.clusterAngle) * 3.2;
+        const targetX = SCREEN_CENTER_X + Math.cos(orbitAngle) * clusterPulse;
+        const targetY = SCREEN_CENTER_Y + Math.sin(orbitAngle) * clusterPulse * 0.82;
+        const scatterX = particle.startX + Math.cos(particle.clusterAngle + spin) * 18 * (1 - gather);
+        const scatterY = particle.startY + Math.sin(particle.clusterAngle + spin) * 14 * (1 - gather);
+        const x = scatterX * (1 - gather) + targetX * gather;
+        const y = scatterY * (1 - gather) + targetY * gather;
+        const scale = 1 + gather * 0.55 + Math.sin(t * 0.006 + particle.radius) * 0.08;
+        drawGifStyleCircle(particle, x, y, scale, spin * particle.spin + particle.clusterAngle);
+      }
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 16px Arial';
+      ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, gather * 1.2)})`;
+      ctx.fillText('CONGRATULATIONS', SCREEN_CENTER_X, SCREEN_CENTER_Y + 58);
+      ctx.restore();
+    }
+
+    function drawProgressBackground() {
+      const height = canvas.height * clamp(ayellowAnimation.progress, 0, 1);
+      ctx.fillStyle = '#F4D070';
+      ctx.fillRect(0, canvas.height - height, canvas.width, height);
+    }
+
+    function drawStage4VideoFrame(t) {
+      if (ayellowAnimation.stage4Video !== 'playing') return false;
+      if (stage4Video.readyState >= 2) {
+        ctx.drawImage(stage4Video, 0, 0, canvas.width, canvas.height);
+      } else {
+        const gradient = ctx.createRadialGradient(160, 120, 12, 160, 120, 180);
+        gradient.addColorStop(0, '#F4D070');
+        gradient.addColorStop(0.45, '#FF8812');
+        gradient.addColorStop(1, '#9ED9D3');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 9; i++) {
+          ctx.beginPath();
+          ctx.arc(160, 120, 20 + i * 18 + Math.sin(t * 0.004 + i) * 8, t * 0.002 + i, t * 0.002 + i + Math.PI * 1.25);
+          ctx.stroke();
+        }
+      }
+      return true;
+    }
+
+    function drawScreen(t) {
+      const speedFactor = state.speed / 45;
+      const animatedT = t * speedFactor;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawProgressBackground();
+
+      if (drawStage4VideoFrame(t)) {
+        drawCongratulationsAnimation(t);
+        requestAnimationFrame(drawScreen);
+        return;
+      }
+
+      const gamePulse = Math.sin(animatedT * 0.002) * 2;
+      const connectivityPulse = Math.cos(animatedT * 0.0018) * 2;
+      const gameDisplayRadius = displayRadius(state.gameRadius, 23) + gamePulse;
+      const connectivityDisplayRadius = displayRadius(state.connectivityRadius, 23) + connectivityPulse;
+      const rotationAngle = 0;
+      drawJellyContactPair(gameDisplayRadius, connectivityDisplayRadius, rotationAngle, animatedT);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game', 46, 224);
+      ctx.fillText('Connectivity', 254, 224);
+      drawCongratulationsAnimation(t);
+
+      requestAnimationFrame(drawScreen);
+    }
+
+    requestAnimationFrame(drawScreen);
+  </script>
+</body>
+</html>

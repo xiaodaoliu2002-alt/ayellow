@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createChallengeState, updateChallengeState } from "./challengeState";
+import { createChallengeState, updateChallengeState, type ChallengeState } from "./challengeState";
 import { SONGS } from "../music/songCatalog";
 
 const magicPotion = SONGS[0];
+const readyForStage1 = (): ChallengeState => ({ ...createChallengeState(magicPotion), preStageSecondsRemaining: 0, drumController: "user1" });
 
 describe("challengeState", () => {
   it("starts in stage 1 with no audible tracks until both riders are active", () => {
@@ -15,15 +16,61 @@ describe("challengeState", () => {
     expect(state.activeTracks).toEqual(["drums", "guitar"]);
   });
 
-  it("lets each rider hear their own base track once that rider is active", () => {
-    const onlyDrums = updateChallengeState(createChallengeState(magicPotion), {
+  it("spends 15 seconds before stage 1 detecting the faster rider as the drum controller", () => {
+    let state = createChallengeState(magicPotion);
+
+    state = updateChallengeState(state, {
+      dtSeconds: 10,
+      synced: false,
+      rider1Active: true,
+      rider2Active: true,
+      rider1CadenceRpm: 90,
+      rider2CadenceRpm: 60,
+      song: magicPotion,
+    });
+    state = updateChallengeState(state, {
+      dtSeconds: 5,
+      synced: false,
+      rider1Active: true,
+      rider2Active: true,
+      rider1CadenceRpm: 70,
+      rider2CadenceRpm: 110,
+      song: magicPotion,
+    });
+
+    expect(state.preStageSecondsRemaining).toBe(0);
+    expect(state.drumController).toBe("user1");
+    expect(state.progressSeconds).toBe(0);
+  });
+
+  it("does not start stage 1 progress during the pre-stage detection window", () => {
+    let state = createChallengeState(magicPotion);
+
+    state = updateChallengeState(state, {
+      dtSeconds: 14,
+      synced: true,
+      rider1Active: true,
+      rider2Active: true,
+      rider1CadenceRpm: 70,
+      rider2CadenceRpm: 80,
+      song: magicPotion,
+    });
+
+    expect(state.preStageSecondsRemaining).toBe(1);
+    expect(state.drumController).toBeNull();
+    expect(state.progressSeconds).toBe(0);
+    expect(state.stage).toBe(1);
+  });
+
+  it("lets the drum controller hear drums and the other rider hear guitar once riders are active", () => {
+    const onlyUser1 = updateChallengeState({ ...createChallengeState(magicPotion), preStageSecondsRemaining: 0, drumController: "user2" }, {
       dtSeconds: 1,
       synced: false,
       rider1Active: true,
       rider2Active: false,
       song: magicPotion,
     });
-    const onlyGuitar = updateChallengeState(createChallengeState(magicPotion), {
+    const onlyUser2 = updateChallengeState({ ...createChallengeState(magicPotion), preStageSecondsRemaining: 0, drumController: "user2" }, {
       dtSeconds: 1,
       synced: false,
       rider1Active: false,
@@ -31,14 +78,14 @@ describe("challengeState", () => {
       song: magicPotion,
     });
 
-    expect(onlyDrums.layerVolumes.drums).toBe(1);
-    expect(onlyDrums.layerVolumes.guitar).toBe(0);
-    expect(onlyGuitar.layerVolumes.drums).toBe(0);
-    expect(onlyGuitar.layerVolumes.guitar).toBe(1);
+    expect(onlyUser1.layerVolumes.drums).toBe(0);
+    expect(onlyUser1.layerVolumes.guitar).toBe(1);
+    expect(onlyUser2.layerVolumes.drums).toBe(1);
+    expect(onlyUser2.layerVolumes.guitar).toBe(0);
   });
 
   it("accumulates 30 seconds of sync to enter stage 2 and hold the current speed", () => {
-    let state = createChallengeState(magicPotion);
+    let state = readyForStage1();
 
     state = updateChallengeState(state, { dtSeconds: 30, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
 
@@ -51,7 +98,7 @@ describe("challengeState", () => {
   });
 
   it("does not count next-stage sync time during the 8 second hold, then cues acceleration", () => {
-    let state = createChallengeState(magicPotion);
+    let state = readyForStage1();
     state = updateChallengeState(state, { dtSeconds: 30, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
 
     state = updateChallengeState(state, { dtSeconds: 7, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
@@ -68,7 +115,7 @@ describe("challengeState", () => {
   });
 
   it("regresses progress when sync is lost before the next stage", () => {
-    let state = createChallengeState(magicPotion);
+    let state = readyForStage1();
     state = updateChallengeState(state, { dtSeconds: 12, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
     state = updateChallengeState(state, { dtSeconds: 5, synced: false, rider1Active: true, rider2Active: true, song: magicPotion });
 
@@ -77,7 +124,7 @@ describe("challengeState", () => {
   });
 
   it("enters stage 3 with another hold before slow-down guidance", () => {
-    let state = createChallengeState(magicPotion);
+    let state = readyForStage1();
     state = updateChallengeState(state, { dtSeconds: 30, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
     state = updateChallengeState(state, { dtSeconds: 8, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
     state = updateChallengeState(state, { dtSeconds: 30, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
@@ -92,7 +139,7 @@ describe("challengeState", () => {
   });
 
   it("enters stage 4 with all tracks at full volume after the final 30 seconds", () => {
-    let state = createChallengeState(magicPotion);
+    let state = readyForStage1();
     state = updateChallengeState(state, { dtSeconds: 30, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
     state = updateChallengeState(state, { dtSeconds: 8, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });
     state = updateChallengeState(state, { dtSeconds: 30, synced: true, rider1Active: true, rider2Active: true, song: magicPotion });

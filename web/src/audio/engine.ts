@@ -132,19 +132,20 @@ export class AudioEngine {
     }
   }
 
-  playStageCue(kind: ChallengeCueKind, guideBpm: GuideBpmSettings = DEFAULT_GUIDE_BPM): void {
+  playStageCue(kind: ChallengeCueKind, guideBpm: GuideBpmSettings = DEFAULT_GUIDE_BPM): HTMLAudioElement | null {
     if (!this.context || !this.cueGain) {
-      return;
+      return null;
     }
     const now = this.context.currentTime + 0.03;
     this.duckBackgroundUntil(now + CUE_DUCK_SECONDS);
-    this.playCueAsset(kind);
+    const cue = this.playCueAsset(kind);
 
     const bpm = guideBpmForKind(kind, guideBpm);
     if (bpm === null) {
-      return;
+      return cue;
     }
     this.playPulseTrain(now + 0.9, GUIDE_PULSE_COUNT, bpm, kind === "speedUp" ? "up" : "down");
+    return cue;
   }
 
   private prepareCueAssets(): void {
@@ -158,7 +159,7 @@ export class AudioEngine {
     }
   }
 
-  private playCueAsset(kind: ChallengeCueKind): void {
+  private playCueAsset(kind: ChallengeCueKind): HTMLAudioElement {
     const template = this.cueTemplates.get(kind) ?? new Audio(cueAssetForKind(kind));
     const cue = template.cloneNode(true) as HTMLAudioElement;
     cue.volume = 1;
@@ -166,6 +167,7 @@ export class AudioEngine {
     void cue.play().catch(() => {
       this.playGuideHit(this.context?.currentTime ?? 0, kind === "slowDown" ? "down" : "up", true);
     });
+    return cue;
   }
 
   private duckBackgroundUntil(untilTime: number): void {

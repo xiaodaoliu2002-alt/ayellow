@@ -43,6 +43,33 @@ class GatewayStateTests(unittest.TestCase):
         self.assertEqual(payload["riders"]["user2"]["status"], "waiting")
         self.assertEqual(payload["discoveredSensors"][0]["ip"], "192.168.1.99")
 
+    def test_updates_animation_signal(self) -> None:
+        state = GatewayState()
+
+        state.update_animation({"animation": {"stage": 2, "progress": 0.5, "congratulations": "playing"}})
+        payload = state.to_payload(now=1.0)
+        self.assertEqual(payload["animation"]["stage"], 2)
+        self.assertEqual(payload["animation"]["progress"], 0.5)
+        self.assertEqual(payload["animation"]["congratulations"], "playing")
+
+        state.update_animation({"animation": {"stage": 4, "progress": 2.0, "stage4Video": "playing", "congratulations": "idle"}})
+        payload = state.to_payload(now=2.0)
+        self.assertEqual(payload["animation"]["stage"], 4)
+        self.assertEqual(payload["animation"]["progress"], 1.0)
+        self.assertEqual(payload["animation"]["stage4Video"], "playing")
+        self.assertEqual(payload["animation"]["congratulations"], "idle")
+
+    def test_updates_radius_mapping(self) -> None:
+        state = GatewayState()
+
+        state.update_radius_mapping({"radiusMapping": {"minRpm": 1, "maxRpm": 20, "minRadius": 9, "maxRadius": 44}})
+        payload = state.to_payload(now=1.0)
+
+        self.assertEqual(payload["radiusMapping"]["minRpm"], 1.0)
+        self.assertEqual(payload["radiusMapping"]["maxRpm"], 20.0)
+        self.assertEqual(payload["radiusMapping"]["minRadius"], 9)
+        self.assertEqual(payload["radiusMapping"]["maxRadius"], 44)
+
     def test_marks_bound_rider_stale(self) -> None:
         state = GatewayState(stale_seconds=3)
         state.update_config({"riders": {"user1": {"sensorIp": "192.168.1.10", "axis": "z"}}})
